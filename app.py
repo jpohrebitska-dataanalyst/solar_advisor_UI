@@ -257,25 +257,28 @@ with right:
     # Optimal tilt by month
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.markdown("<div class='section-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
-
-    items = list(out.tilt_by_month_df.itertuples(index=False))
+    
+    m_df = out.tilt_by_month_df  # columns: Month, Best Tilt (deg)
+    months = m_df["Month"].tolist()
+    tilts = m_df["Best Tilt (deg)"].astype(int).tolist()
+    
     row1 = st.columns(6, gap="small")
     row2 = st.columns(6, gap="small")
-
-    for i, r in enumerate(items[:6]):
+    
+    for i in range(min(6, len(months))):
         with row1[i]:
             st.markdown(
-                f"<div class='tile'><div class='m'>{r.Month}</div><div class='v'>{getattr(r, 'Best Tilt (deg)')}°</div></div>",
+                f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
                 unsafe_allow_html=True
             )
-
-    for i, r in enumerate(items[6:12]):
-        with row2[i]:
+    
+    for i in range(6, min(12, len(months))):
+        with row2[i - 6]:
             st.markdown(
-                f"<div class='tile'><div class='m'>{r.Month}</div><div class='v'>{getattr(r, 'Best Tilt (deg)')}°</div></div>",
+                f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
                 unsafe_allow_html=True
             )
-
+    
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.write("")
