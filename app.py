@@ -7,7 +7,6 @@ from utils.base_model import run_for_ui
 
 @contextmanager
 def white_card():
-    # Works on newer Streamlit; safe fallback on older versions
     try:
         with st.container(border=True):
             yield
@@ -25,17 +24,18 @@ st.set_page_config(page_title="Solar Ninja", page_icon="☀️", layout="wide")
 st.markdown(
     """
 <style>
+/* ---------- Page ---------- */
 .stApp{ background:#f6f7fb; }
 .block-container{ max-width:1240px; margin:0 auto; padding-top:1.05rem; padding-bottom:2.2rem; }
 header{ visibility:hidden; height:0px; }
 section.main > div{ padding-top:0.10rem; }
 
-/* Brand */
+/* ---------- Brand ---------- */
 .brand{ margin-top:6px; }
 .brand b{ font-size:1.38rem; font-weight:950; color:#0f172a; }
 .brand small{ display:block; margin-top:2px; font-size:1.03rem; color:rgba(2,6,23,.62); }
 
-/* Hero */
+/* ---------- Hero ---------- */
 .hero-wrap{ text-align:center; margin:10px 0 26px; }
 .hero-kicker{
   display:inline-flex; align-items:center; gap:8px;
@@ -55,30 +55,52 @@ section.main > div{ padding-top:0.10rem; }
   line-height:1.45;
 }
 
-/* Make border=True containers look like Lovable white cards */
+/* ---------- White cards for containers(border=True) ---------- */
+/* Streamlit can render slightly different structures per version.
+   We paint wrapper + inner blocks to guarantee WHITE content. */
+:root{
+  --card-radius: 20px;
+  --card-shadow: 0 10px 28px rgba(15,23,42,.08);
+}
+
+/* Wrapper */
 div[data-testid="stVerticalBlockBorderWrapper"]{
   background:#fff !important;
   border:0 !important;
-  border-radius:18px !important;
-  box-shadow:0 10px 28px rgba(15,23,42,.08) !important;
-  padding:16px 16px 14px 16px !important;
-}
-div[data-testid="stVerticalBlockBorderWrapper"] > div{
-  background:#fff !important;
-  border-radius:18px !important;
-  padding:0 !important;
+  border-radius:var(--card-radius) !important;
+  box-shadow:var(--card-shadow) !important;
+  padding:18px 18px 16px 18px !important;
 }
 
+/* First inner block */
+div[data-testid="stVerticalBlockBorderWrapper"] > div{
+  background:#fff !important;
+  border-radius:var(--card-radius) !important;
+}
+
+/* Deeper inner blocks (this fixes "grey inside" on some themes/versions) */
+div[data-testid="stVerticalBlockBorderWrapper"] *{
+  background-color: transparent;
+}
+div[data-testid="stVerticalBlockBorderWrapper"] .stMarkdown,
+div[data-testid="stVerticalBlockBorderWrapper"] .stText,
+div[data-testid="stVerticalBlockBorderWrapper"] .stDataFrame,
+div[data-testid="stVerticalBlockBorderWrapper"] .element-container,
+div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlock"]{
+  background: transparent !important;
+}
+
+/* Section titles */
 .section-title{
   font-size:1.02rem; font-weight:950; color:#0f172a; margin:0 0 12px 0;
 }
 
-/* KPI cards */
+/* ---------- KPI cards ---------- */
 .kpi{
   background:#fff;
   border:0;
-  border-radius:18px;
-  box-shadow:0 10px 28px rgba(15,23,42,.08);
+  border-radius:var(--card-radius);
+  box-shadow:var(--card-shadow);
   padding:14px 16px;
   min-height:118px;
   display:flex; flex-direction:column; justify-content:center;
@@ -86,7 +108,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div{
 .kpi .t{ font-size:.92rem; color:rgba(2,6,23,.62); margin-bottom:10px; font-weight:850; }
 .kpi .v{ font-size:1.88rem; font-weight:950; color:#0f172a; line-height:1.05; }
 
-/* Month tiles */
+/* ---------- Month tiles ---------- */
 .tile{
   background:#f1f5f9;
   border:1px solid rgba(15,23,42,.08);
@@ -97,7 +119,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div{
 .tile .m{ font-size:.84rem; color:rgba(2,6,23,.62); font-weight:700; }
 .tile .v{ font-size:1.18rem; font-weight:950; color:#0f172a; margin-top:4px; }
 
-/* Buttons */
+/* ---------- Buttons ---------- */
 .stFormSubmitButton button, .stButton button, .stDownloadButton button{
   background:#f59e0b !important;
   color:#0b1220 !important;
@@ -111,7 +133,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div{
   filter:brightness(0.96);
 }
 
-/* Sliders: orange filled + green unfilled */
+/* ---------- Sliders: orange filled + green unfilled ---------- */
 div[data-baseweb="slider"] [role="presentation"]{ background-color:#22c55e !important; }
 div[data-baseweb="slider"] [role="presentation"] > div{ background-color:#f59e0b !important; }
 div[data-baseweb="slider"] div[role="slider"]{
@@ -119,6 +141,12 @@ div[data-baseweb="slider"] div[role="slider"]{
   border-color:#f59e0b !important;
 }
 div[data-baseweb="slider"] span{ color:#f59e0b !important; font-weight:900 !important; }
+
+/* A little more rounding everywhere in inputs */
+div[data-testid="stNumberInput"] input,
+div[data-testid="stTextInput"] input{
+  border-radius:14px !important;
+}
 </style>
 """,
     unsafe_allow_html=True,
@@ -140,7 +168,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# IMPORTANT: no gap= ... (for compatibility)
 left, right = st.columns([0.38, 0.62])
 
 with left:
@@ -179,7 +206,7 @@ with right:
 
     out = st.session_state.ui_result
 
-    # Download PDF: NO card / NO frame
+    # Download (no card)
     a, b = st.columns([0.70, 0.30])
     with a:
         st.empty()
@@ -197,8 +224,8 @@ with right:
 
     spacer(18)
 
+    # KPI row
     k1, k2, k3, k4 = st.columns(4)
-
     with k1:
         st.markdown(
             f"<div class='kpi'><div class='t'>Optimal angle</div><div class='v'>{out.optimal_angle}°</div></div>",
@@ -222,21 +249,24 @@ with right:
 
     spacer(22)
 
+    # Monthly chart card
     with white_card():
         st.markdown("<div class='section-title'>Monthly generation (kWh)</div>", unsafe_allow_html=True)
         df = out.monthly_chart_df
 
         fig = go.Figure()
         fig.add_trace(go.Scatter(
-            x=df["month"], y=df["kwh_user"], name="Your tilt",
-            mode="lines", line=dict(color="#f59e0b", width=3)
+            x=df["month"], y=df["kwh_user"],
+            name="Your tilt", mode="lines",
+            line=dict(color="#f59e0b", width=3)
         ))
         fig.add_trace(go.Scatter(
-            x=df["month"], y=df["kwh_optimal_yearly"], name="Optimal tilt",
-            mode="lines", line=dict(color="#22c55e", width=3)
+            x=df["month"], y=df["kwh_optimal_yearly"],
+            name="Optimal tilt", mode="lines",
+            line=dict(color="#22c55e", width=3)
         ))
         fig.update_layout(
-            height=360,
+            height=370,
             margin=dict(l=10, r=10, t=10, b=10),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             xaxis=dict(showgrid=False),
@@ -246,12 +276,16 @@ with right:
 
     spacer(22)
 
+    # Optimal tilt by month — make this container "bigger"
     with white_card():
         st.markdown("<div class='section-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
 
         m_df = out.tilt_by_month_df
         months = m_df["Month"].tolist()
         tilts = m_df["BestTiltDeg"].astype(int).tolist()
+
+        # Add some inner breathing room (makes card feel taller)
+        spacer(6)
 
         row1 = st.columns(6)
         row2 = st.columns(6)
@@ -262,12 +296,15 @@ with right:
                     f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
                     unsafe_allow_html=True,
                 )
+        spacer(8)
         for i in range(6, min(12, len(months))):
             with row2[i - 6]:
                 st.markdown(
                     f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
                     unsafe_allow_html=True,
                 )
+
+        spacer(6)
 
     spacer(22)
 
