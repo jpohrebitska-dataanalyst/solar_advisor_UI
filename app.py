@@ -44,25 +44,28 @@ section.main > div{ padding-top:0.10rem; }
   line-height:1.45;
 }
 
+/* ---------- Shared tokens ---------- */
 :root{
   --card-radius: 20px;
   --card-shadow: 0 10px 28px rgba(15,23,42,.08);
 }
 
-/* ---------- Marker-based white cards (SAFE, prevents extra bottom card) ---------- */
-.sn-card-marker{ display:none; }
-.sn-card-content{ display:none; }
-
-/* Style ONLY the block right after marker that ALSO contains .sn-card-content */
-div:has(.sn-card-marker) + div:has(.sn-card-content){
+/* ---------- White cards via container(border=True) ---------- */
+/* Streamlit draws a border wrapper when border=True; we restyle it to "Lovable card" */
+div[data-testid="stVerticalBlockBorderWrapper"]{
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+div[data-testid="stVerticalBlockBorderWrapper"] > div{
+  border: 0 !important;
   background:#fff !important;
-  border:0 !important;
   border-radius:var(--card-radius) !important;
   box-shadow:var(--card-shadow) !important;
   padding:18px 18px 16px 18px !important;
 }
 
-/* Section titles */
+/* Titles */
 .section-title{
   font-size:1.02rem; font-weight:950; color:#0f172a; margin:0 0 12px 0;
 }
@@ -80,19 +83,35 @@ div:has(.sn-card-marker) + div:has(.sn-card-content){
 .kpi .t{ font-size:.92rem; color:rgba(2,6,23,.62); margin-bottom:10px; font-weight:850; }
 .kpi .v{ font-size:1.88rem; font-weight:950; color:#0f172a; line-height:1.05; }
 
-/* ---------- Month tiles ---------- */
+/* ---------- Month tiles (equal size, content fits) ---------- */
 .tile{
   background:#f1f5f9 !important;
   border:1px solid rgba(15,23,42,.08) !important;
   border-radius:16px !important;
-  padding:14px 10px !important;
+  padding:12px 10px !important;
   text-align:center !important;
-  margin:8px 8px !important;         /* stable gap */
+  margin:10px 10px !important;   /* stable gap between all tiles */
+  width:100% !important;
+  min-height:92px !important;
+  display:flex !important;
+  flex-direction:column !important;
+  justify-content:center !important;
+  align-items:center !important;
 }
-.tile .m{ font-size:.84rem; color:rgba(2,6,23,.62); font-weight:700; }
-.tile .v{ font-size:1.18rem; font-weight:950; color:#0f172a; margin-top:4px; }
+.tile .m{
+  font-size:.78rem;
+  color:rgba(2,6,23,.62);
+  font-weight:800;
+  line-height:1.1;
+  max-width:90px;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.tile .v{ font-size:1.18rem; font-weight:950; color:#0f172a; margin-top:6px; }
 
-/* ---------- Buttons (force orange for Calculate + Download) ---------- */
+/* ---------- Buttons (force orange) ---------- */
 div[data-testid="stFormSubmitButton"] button,
 div[data-testid="stDownloadButton"] button,
 div[data-testid="stButton"] button{
@@ -110,27 +129,27 @@ div[data-testid="stButton"] button:hover{
   filter:brightness(0.96);
 }
 
-/* ---------- Sliders (best effort) ---------- */
+/* Inputs rounding */
+div[data-testid="stNumberInput"] input{ border-radius:14px !important; }
+
+/* Slider (best effort) */
 div[data-baseweb="slider"] div[role="slider"]{
   background-color:#f59e0b !important;
   border-color:#f59e0b !important;
 }
 div[data-baseweb="slider"] span{ color:#f59e0b !important; font-weight:900 !important; }
-
-/* Inputs rounding */
-div[data-testid="stNumberInput"] input{ border-radius:14px !important; }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
-# Brand
+# Brand (left top)
 st.markdown(
     "<div class='brand'><b>☀️ Solar Ninja</b><small>Solar Energy Optimization</small></div>",
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
-# Hero
+# Hero (center)
 st.markdown(
     """
 <div class="hero-wrap">
@@ -139,17 +158,14 @@ st.markdown(
   <div class="hero-sub">Calculate the optimal panel tilt angle and get the accurate forecast of annual generation for your location.</div>
 </div>
 """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
-left, right = st.columns([0.38, 0.62])
+left, right = st.columns([0.38, 0.62], gap="large")
 
-# ---------- LEFT: System Parameters ----------
+# ---------- LEFT: System Parameters (white card) ----------
 with left:
-    st.markdown("<div class='sn-card-marker'></div>", unsafe_allow_html=True)
-    with st.container():
-        st.markdown("<div class='sn-card-content'></div>", unsafe_allow_html=True)
-
+    with st.container(border=True):
         st.markdown("<div class='section-title'>System Parameters</div>", unsafe_allow_html=True)
 
         with st.form("calc_form", border=False):
@@ -171,7 +187,7 @@ with left:
 
             submitted = st.form_submit_button("⚡ Calculate", use_container_width=True)
 
-# ---------- RIGHT: Results ----------
+# ---------- RIGHT: Results (NO big wrapper card) ----------
 with right:
     if submitted or "ui_result" not in st.session_state:
         with st.spinner("Running Solar Ninja calculations…"):
@@ -185,7 +201,7 @@ with right:
 
     out = st.session_state.ui_result
 
-    # Download (no card)
+    # Download (standalone, no container)
     a, b = st.columns([0.70, 0.30])
     with a:
         st.empty()
@@ -203,8 +219,8 @@ with right:
 
     spacer(18)
 
-    # KPI row
-    k1, k2, k3, k4 = st.columns(4)
+    # KPI row (standalone)
+    k1, k2, k3, k4 = st.columns(4, gap="medium")
     with k1:
         st.markdown(
             f"<div class='kpi'><div class='t'>Optimal angle</div><div class='v'>{out.optimal_angle}°</div></div>",
@@ -228,25 +244,30 @@ with right:
 
     spacer(22)
 
-    # Monthly chart card
-    st.markdown("<div class='sn-card-marker'></div>", unsafe_allow_html=True)
-    with st.container():
-        st.markdown("<div class='sn-card-content'></div>", unsafe_allow_html=True)
-
+    # Monthly chart (white card)
+    with st.container(border=True):
         st.markdown("<div class='section-title'>Monthly generation (kWh)</div>", unsafe_allow_html=True)
         df = out.monthly_chart_df
 
         fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=df["month"], y=df["kwh_user"],
-            name="Your tilt", mode="lines",
-            line=dict(color="#f59e0b", width=3)
-        ))
-        fig.add_trace(go.Scatter(
-            x=df["month"], y=df["kwh_optimal_yearly"],
-            name="Optimal tilt", mode="lines",
-            line=dict(color="#22c55e", width=3)
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=df["month"],
+                y=df["kwh_user"],
+                name="Your tilt",
+                mode="lines",
+                line=dict(color="#f59e0b", width=3),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=df["month"],
+                y=df["kwh_optimal_yearly"],
+                name="Optimal tilt",
+                mode="lines",
+                line=dict(color="#22c55e", width=3),
+            )
+        )
         fig.update_layout(
             height=370,
             margin=dict(l=10, r=10, t=10, b=10),
@@ -258,11 +279,8 @@ with right:
 
     spacer(22)
 
-    # Optimal tilt by month card
-    st.markdown("<div class='sn-card-marker'></div>", unsafe_allow_html=True)
-    with st.container():
-        st.markdown("<div class='sn-card-content'></div>", unsafe_allow_html=True)
-
+    # Optimal tilt by month (white card)
+    with st.container(border=True):
         st.markdown("<div class='section-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
 
         m_df = out.tilt_by_month_df
@@ -279,22 +297,20 @@ with right:
                     f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
                     unsafe_allow_html=True,
                 )
-        spacer(2)
+
         for i in range(6, min(12, len(months))):
             with row2[i - 6]:
                 st.markdown(
                     f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
                     unsafe_allow_html=True,
                 )
+
         spacer(6)
 
     spacer(22)
 
-    # Recommendations card
-    st.markdown("<div class='sn-card-marker'></div>", unsafe_allow_html=True)
-    with st.container():
-        st.markdown("<div class='sn-card-content'></div>", unsafe_allow_html=True)
-
+    # Recommendations (white card)
+    with st.container(border=True):
         st.markdown("<div class='section-title'>Recommendations</div>", unsafe_allow_html=True)
         for r in out.recommendations:
             st.markdown(f"- {r}")
