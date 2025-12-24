@@ -1,18 +1,7 @@
 import streamlit as st
 import plotly.graph_objects as go
-from contextlib import contextmanager
 
 from utils.base_model import run_for_ui
-
-
-@contextmanager
-def white_card():
-    try:
-        with st.container(border=True):
-            yield
-    except TypeError:
-        with st.container():
-            yield
 
 
 def spacer(px: int = 18):
@@ -55,16 +44,16 @@ section.main > div{ padding-top:0.10rem; }
   line-height:1.45;
 }
 
-/* ---------- White cards for containers(border=True) ---------- */
-/* Streamlit can render slightly different structures per version.
-   We paint wrapper + inner blocks to guarantee WHITE content. */
 :root{
   --card-radius: 20px;
   --card-shadow: 0 10px 28px rgba(15,23,42,.08);
 }
 
-/* Wrapper */
-div[data-testid="stVerticalBlockBorderWrapper"]{
+/* ---------- Marker-based "white card" (robust for any Streamlit DOM) ---------- */
+.sn-card-marker{ display:none; }
+
+/* Style the block that goes immediately AFTER the marker block */
+div:has(.sn-card-marker) + div{
   background:#fff !important;
   border:0 !important;
   border-radius:var(--card-radius) !important;
@@ -72,22 +61,9 @@ div[data-testid="stVerticalBlockBorderWrapper"]{
   padding:18px 18px 16px 18px !important;
 }
 
-/* First inner block */
-div[data-testid="stVerticalBlockBorderWrapper"] > div{
-  background:#fff !important;
-  border-radius:var(--card-radius) !important;
-}
-
-/* Deeper inner blocks (this fixes "grey inside" on some themes/versions) */
-div[data-testid="stVerticalBlockBorderWrapper"] *{
-  background-color: transparent;
-}
-div[data-testid="stVerticalBlockBorderWrapper"] .stMarkdown,
-div[data-testid="stVerticalBlockBorderWrapper"] .stText,
-div[data-testid="stVerticalBlockBorderWrapper"] .stDataFrame,
-div[data-testid="stVerticalBlockBorderWrapper"] .element-container,
-div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlock"]{
-  background: transparent !important;
+/* Ensure inner content doesn't paint grey */
+div:has(.sn-card-marker) + div *{
+  background-color: transparent !important;
 }
 
 /* Section titles */
@@ -108,13 +84,14 @@ div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlock
 .kpi .t{ font-size:.92rem; color:rgba(2,6,23,.62); margin-bottom:10px; font-weight:850; }
 .kpi .v{ font-size:1.88rem; font-weight:950; color:#0f172a; line-height:1.05; }
 
-/* ---------- Month tiles ---------- */
+/* ---------- Month tiles (add stable spacing between all 12) ---------- */
 .tile{
-  background:#f1f5f9;
-  border:1px solid rgba(15,23,42,.08);
-  border-radius:16px;
-  padding:14px 10px;
-  text-align:center;
+  background:#f1f5f9 !important;
+  border:1px solid rgba(15,23,42,.08) !important;
+  border-radius:16px !important;
+  padding:14px 10px !important;
+  text-align:center !important;
+  margin:8px 8px !important;         /* <- stable gap */
 }
 .tile .m{ font-size:.84rem; color:rgba(2,6,23,.62); font-weight:700; }
 .tile .v{ font-size:1.18rem; font-weight:950; color:#0f172a; margin-top:4px; }
@@ -133,30 +110,33 @@ div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlock
   filter:brightness(0.96);
 }
 
-/* ---------- Sliders: orange filled + green unfilled ---------- */
-div[data-baseweb="slider"] [role="presentation"]{ background-color:#22c55e !important; }
-div[data-baseweb="slider"] [role="presentation"] > div{ background-color:#f59e0b !important; }
+/* ---------- Sliders: orange filled + green unfilled (more aggressive selectors) ---------- */
 div[data-baseweb="slider"] div[role="slider"]{
   background-color:#f59e0b !important;
   border-color:#f59e0b !important;
 }
 div[data-baseweb="slider"] span{ color:#f59e0b !important; font-weight:900 !important; }
 
-/* A little more rounding everywhere in inputs */
-div[data-testid="stNumberInput"] input,
-div[data-testid="stTextInput"] input{
-  border-radius:14px !important;
-}
+/* Try multiple internal nodes used by BaseWeb */
+div[data-baseweb="slider"] div[role="presentation"]{ background:#22c55e !important; }
+div[data-baseweb="slider"] div[role="presentation"] > div{ background:#f59e0b !important; }
+div[data-baseweb="slider"] div[aria-hidden="true"]{ background:#22c55e !important; }
+div[data-baseweb="slider"] div[aria-hidden="true"] > div{ background:#f59e0b !important; }
+
+/* Inputs rounding */
+div[data-testid="stNumberInput"] input{ border-radius:14px !important; }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
+# Brand
 st.markdown(
     "<div class='brand'><b>☀️ Solar Ninja</b><small>Solar Energy Optimization</small></div>",
     unsafe_allow_html=True
 )
 
+# Hero
 st.markdown(
     """
 <div class="hero-wrap">
@@ -170,8 +150,10 @@ st.markdown(
 
 left, right = st.columns([0.38, 0.62])
 
+# ---------- LEFT: System Parameters ----------
 with left:
-    with white_card():
+    st.markdown("<div class='sn-card-marker'></div>", unsafe_allow_html=True)
+    with st.container():
         st.markdown("<div class='section-title'>System Parameters</div>", unsafe_allow_html=True)
 
         with st.form("calc_form", border=False):
@@ -193,6 +175,7 @@ with left:
 
             submitted = st.form_submit_button("⚡ Calculate", use_container_width=True)
 
+# ---------- RIGHT: Results ----------
 with right:
     if submitted or "ui_result" not in st.session_state:
         with st.spinner("Running Solar Ninja calculations…"):
@@ -250,7 +233,8 @@ with right:
     spacer(22)
 
     # Monthly chart card
-    with white_card():
+    st.markdown("<div class='sn-card-marker'></div>", unsafe_allow_html=True)
+    with st.container():
         st.markdown("<div class='section-title'>Monthly generation (kWh)</div>", unsafe_allow_html=True)
         df = out.monthly_chart_df
 
@@ -276,17 +260,16 @@ with right:
 
     spacer(22)
 
-    # Optimal tilt by month — make this container "bigger"
-    with white_card():
+    # Optimal tilt by month card
+    st.markdown("<div class='sn-card-marker'></div>", unsafe_allow_html=True)
+    with st.container():
         st.markdown("<div class='section-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
 
         m_df = out.tilt_by_month_df
         months = m_df["Month"].tolist()
         tilts = m_df["BestTiltDeg"].astype(int).tolist()
 
-        # Add some inner breathing room (makes card feel taller)
         spacer(6)
-
         row1 = st.columns(6)
         row2 = st.columns(6)
 
@@ -296,19 +279,20 @@ with right:
                     f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
                     unsafe_allow_html=True,
                 )
-        spacer(8)
+        spacer(2)
         for i in range(6, min(12, len(months))):
             with row2[i - 6]:
                 st.markdown(
                     f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
                     unsafe_allow_html=True,
                 )
-
         spacer(6)
 
     spacer(22)
 
-    with white_card():
+    # Recommendations card
+    st.markdown("<div class='sn-card-marker'></div>", unsafe_allow_html=True)
+    with st.container():
         st.markdown("<div class='section-title'>Recommendations</div>", unsafe_allow_html=True)
         for r in out.recommendations:
             st.markdown(f"- {r}")
