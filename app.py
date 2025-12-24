@@ -84,4 +84,194 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div{
   display:flex; flex-direction:column; justify-content:center;
 }
 .kpi .t{ font-size:.92rem; color:rgba(2,6,23,.62); margin-bottom:10px; font-weight:850; }
-.kpi .v{ font-size:1.88rem; font-weight:950; color:#0f172a; l
+.kpi .v{ font-size:1.88rem; font-weight:950; color:#0f172a; line-height:1.05; }
+
+/* Month tiles */
+.tile{
+  background:#f1f5f9;
+  border:1px solid rgba(15,23,42,.08);
+  border-radius:16px;
+  padding:14px 10px;
+  text-align:center;
+}
+.tile .m{ font-size:.84rem; color:rgba(2,6,23,.62); font-weight:700; }
+.tile .v{ font-size:1.18rem; font-weight:950; color:#0f172a; margin-top:4px; }
+
+/* Buttons */
+.stFormSubmitButton button, .stButton button, .stDownloadButton button{
+  background:#f59e0b !important;
+  color:#0b1220 !important;
+  border:0 !important;
+  border-radius:14px !important;
+  font-weight:950 !important;
+  padding:0.62rem 0.95rem !important;
+  box-shadow:0 10px 24px rgba(245,158,11,.18) !important;
+}
+.stFormSubmitButton button:hover, .stButton button:hover, .stDownloadButton button:hover{
+  filter:brightness(0.96);
+}
+
+/* Sliders: orange filled + green unfilled */
+div[data-baseweb="slider"] [role="presentation"]{ background-color:#22c55e !important; }
+div[data-baseweb="slider"] [role="presentation"] > div{ background-color:#f59e0b !important; }
+div[data-baseweb="slider"] div[role="slider"]{
+  background-color:#f59e0b !important;
+  border-color:#f59e0b !important;
+}
+div[data-baseweb="slider"] span{ color:#f59e0b !important; font-weight:900 !important; }
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    "<div class='brand'><b>☀️ Solar Ninja</b><small>Solar Energy Optimization</small></div>",
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    """
+<div class="hero-wrap">
+  <div class="hero-kicker">☀️ Optimize your solar system</div>
+  <div class="hero-title">Maximize <span>generation</span></div>
+  <div class="hero-sub">Calculate the optimal panel tilt angle and get the accurate forecast of annual generation for your location.</div>
+</div>
+""",
+    unsafe_allow_html=True
+)
+
+# IMPORTANT: no gap= ... (for compatibility)
+left, right = st.columns([0.38, 0.62])
+
+with left:
+    with white_card():
+        st.markdown("<div class='section-title'>System Parameters</div>", unsafe_allow_html=True)
+
+        with st.form("calc_form", border=False):
+            st.markdown("**📍 Location**")
+            latitude = st.number_input("Latitude (°)", value=50.45, format="%.4f")
+            longitude = st.number_input("Longitude (°)", value=30.52, format="%.4f")
+
+            st.divider()
+            st.markdown("**⚡ System power**")
+            system_power_kw = st.number_input("System power (kW)", value=10.0, step=0.5)
+
+            st.divider()
+            st.markdown("**📐 Panel tilt**")
+            user_tilt = st.slider("Tilt angle (°)", 0, 90, 45)
+
+            st.divider()
+            st.markdown("**🧭 Orientation (azimuth)**")
+            user_azimuth = st.slider("Azimuth (°)", 0, 360, 180)
+
+            submitted = st.form_submit_button("⚡ Calculate", use_container_width=True)
+
+with right:
+    if submitted or "ui_result" not in st.session_state:
+        with st.spinner("Running Solar Ninja calculations…"):
+            st.session_state.ui_result = run_for_ui(
+                latitude=latitude,
+                longitude=longitude,
+                system_power_kw=system_power_kw,
+                user_tilt=user_tilt,
+                user_azimuth=user_azimuth,
+            )
+
+    out = st.session_state.ui_result
+
+    # Download PDF: NO card / NO frame
+    a, b = st.columns([0.70, 0.30])
+    with a:
+        st.empty()
+    with b:
+        if out.pdf_bytes:
+            st.download_button(
+                "⬇️ Download PDF",
+                data=out.pdf_bytes,
+                file_name="solar_ninja_generation_report.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        else:
+            st.button("⬇️ Download PDF", disabled=True, use_container_width=True)
+
+    spacer(18)
+
+    k1, k2, k3, k4 = st.columns(4)
+
+    with k1:
+        st.markdown(
+            f"<div class='kpi'><div class='t'>Optimal angle</div><div class='v'>{out.optimal_angle}°</div></div>",
+            unsafe_allow_html=True,
+        )
+    with k2:
+        st.markdown(
+            f"<div class='kpi'><div class='t'>Your generation</div><div class='v'>{out.annual_kwh_user:,.0f}</div></div>",
+            unsafe_allow_html=True,
+        )
+    with k3:
+        st.markdown(
+            f"<div class='kpi'><div class='t'>Optimal generation</div><div class='v'>{out.annual_kwh_optimal:,.0f}</div></div>",
+            unsafe_allow_html=True,
+        )
+    with k4:
+        st.markdown(
+            f"<div class='kpi'><div class='t'>Potential</div><div class='v'>{out.potential_pct:+.1f}%</div></div>",
+            unsafe_allow_html=True,
+        )
+
+    spacer(22)
+
+    with white_card():
+        st.markdown("<div class='section-title'>Monthly generation (kWh)</div>", unsafe_allow_html=True)
+        df = out.monthly_chart_df
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df["month"], y=df["kwh_user"], name="Your tilt",
+            mode="lines", line=dict(color="#f59e0b", width=3)
+        ))
+        fig.add_trace(go.Scatter(
+            x=df["month"], y=df["kwh_optimal_yearly"], name="Optimal tilt",
+            mode="lines", line=dict(color="#22c55e", width=3)
+        ))
+        fig.update_layout(
+            height=360,
+            margin=dict(l=10, r=10, t=10, b=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            xaxis=dict(showgrid=False),
+            yaxis=dict(gridcolor="rgba(15,23,42,0.08)"),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    spacer(22)
+
+    with white_card():
+        st.markdown("<div class='section-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
+
+        m_df = out.tilt_by_month_df
+        months = m_df["Month"].tolist()
+        tilts = m_df["BestTiltDeg"].astype(int).tolist()
+
+        row1 = st.columns(6)
+        row2 = st.columns(6)
+
+        for i in range(min(6, len(months))):
+            with row1[i]:
+                st.markdown(
+                    f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
+                    unsafe_allow_html=True,
+                )
+        for i in range(6, min(12, len(months))):
+            with row2[i - 6]:
+                st.markdown(
+                    f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
+                    unsafe_allow_html=True,
+                )
+
+    spacer(22)
+
+    with white_card():
+        st.markdown("<div class='section-title'>Recommendations</div>", unsafe_allow_html=True)
+        for r in out.recommendations:
+            st.markdown(f"- {r}")
