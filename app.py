@@ -49,21 +49,17 @@ section.main > div{ padding-top:0.10rem; }
   --card-shadow: 0 10px 28px rgba(15,23,42,.08);
 }
 
-/* ---------- Marker-based "white card" (robust for any Streamlit DOM) ---------- */
+/* ---------- Marker-based white cards (SAFE, prevents extra bottom card) ---------- */
 .sn-card-marker{ display:none; }
+.sn-card-content{ display:none; }
 
-/* Style the block that goes immediately AFTER the marker block */
-div:has(.sn-card-marker) + div{
+/* Style ONLY the block right after marker that ALSO contains .sn-card-content */
+div:has(.sn-card-marker) + div:has(.sn-card-content){
   background:#fff !important;
   border:0 !important;
   border-radius:var(--card-radius) !important;
   box-shadow:var(--card-shadow) !important;
   padding:18px 18px 16px 18px !important;
-}
-
-/* Ensure inner content doesn't paint grey */
-div:has(.sn-card-marker) + div *{
-  background-color: transparent !important;
 }
 
 /* Section titles */
@@ -84,20 +80,22 @@ div:has(.sn-card-marker) + div *{
 .kpi .t{ font-size:.92rem; color:rgba(2,6,23,.62); margin-bottom:10px; font-weight:850; }
 .kpi .v{ font-size:1.88rem; font-weight:950; color:#0f172a; line-height:1.05; }
 
-/* ---------- Month tiles (add stable spacing between all 12) ---------- */
+/* ---------- Month tiles ---------- */
 .tile{
   background:#f1f5f9 !important;
   border:1px solid rgba(15,23,42,.08) !important;
   border-radius:16px !important;
   padding:14px 10px !important;
   text-align:center !important;
-  margin:8px 8px !important;         /* <- stable gap */
+  margin:8px 8px !important;         /* stable gap */
 }
 .tile .m{ font-size:.84rem; color:rgba(2,6,23,.62); font-weight:700; }
 .tile .v{ font-size:1.18rem; font-weight:950; color:#0f172a; margin-top:4px; }
 
-/* ---------- Buttons ---------- */
-.stFormSubmitButton button, .stButton button, .stDownloadButton button{
+/* ---------- Buttons (force orange for Calculate + Download) ---------- */
+div[data-testid="stFormSubmitButton"] button,
+div[data-testid="stDownloadButton"] button,
+div[data-testid="stButton"] button{
   background:#f59e0b !important;
   color:#0b1220 !important;
   border:0 !important;
@@ -106,22 +104,18 @@ div:has(.sn-card-marker) + div *{
   padding:0.62rem 0.95rem !important;
   box-shadow:0 10px 24px rgba(245,158,11,.18) !important;
 }
-.stFormSubmitButton button:hover, .stButton button:hover, .stDownloadButton button:hover{
+div[data-testid="stFormSubmitButton"] button:hover,
+div[data-testid="stDownloadButton"] button:hover,
+div[data-testid="stButton"] button:hover{
   filter:brightness(0.96);
 }
 
-/* ---------- Sliders: orange filled + green unfilled (more aggressive selectors) ---------- */
+/* ---------- Sliders (best effort) ---------- */
 div[data-baseweb="slider"] div[role="slider"]{
   background-color:#f59e0b !important;
   border-color:#f59e0b !important;
 }
 div[data-baseweb="slider"] span{ color:#f59e0b !important; font-weight:900 !important; }
-
-/* Try multiple internal nodes used by BaseWeb */
-div[data-baseweb="slider"] div[role="presentation"]{ background:#22c55e !important; }
-div[data-baseweb="slider"] div[role="presentation"] > div{ background:#f59e0b !important; }
-div[data-baseweb="slider"] div[aria-hidden="true"]{ background:#22c55e !important; }
-div[data-baseweb="slider"] div[aria-hidden="true"] > div{ background:#f59e0b !important; }
 
 /* Inputs rounding */
 div[data-testid="stNumberInput"] input{ border-radius:14px !important; }
@@ -154,6 +148,8 @@ left, right = st.columns([0.38, 0.62])
 with left:
     st.markdown("<div class='sn-card-marker'></div>", unsafe_allow_html=True)
     with st.container():
+        st.markdown("<div class='sn-card-content'></div>", unsafe_allow_html=True)
+
         st.markdown("<div class='section-title'>System Parameters</div>", unsafe_allow_html=True)
 
         with st.form("calc_form", border=False):
@@ -235,6 +231,8 @@ with right:
     # Monthly chart card
     st.markdown("<div class='sn-card-marker'></div>", unsafe_allow_html=True)
     with st.container():
+        st.markdown("<div class='sn-card-content'></div>", unsafe_allow_html=True)
+
         st.markdown("<div class='section-title'>Monthly generation (kWh)</div>", unsafe_allow_html=True)
         df = out.monthly_chart_df
 
@@ -263,6 +261,8 @@ with right:
     # Optimal tilt by month card
     st.markdown("<div class='sn-card-marker'></div>", unsafe_allow_html=True)
     with st.container():
+        st.markdown("<div class='sn-card-content'></div>", unsafe_allow_html=True)
+
         st.markdown("<div class='section-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
 
         m_df = out.tilt_by_month_df
@@ -293,6 +293,8 @@ with right:
     # Recommendations card
     st.markdown("<div class='sn-card-marker'></div>", unsafe_allow_html=True)
     with st.container():
+        st.markdown("<div class='sn-card-content'></div>", unsafe_allow_html=True)
+
         st.markdown("<div class='section-title'>Recommendations</div>", unsafe_allow_html=True)
         for r in out.recommendations:
             st.markdown(f"- {r}")
