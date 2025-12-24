@@ -44,12 +44,25 @@ section.main > div{ padding-top:0.10rem; }
   line-height:1.45;
 }
 
-/* ---------- White section cards (OUR wrappers only) ---------- */
-.sn-card{
-  background:#fff;
-  border-radius:22px;
-  box-shadow:0 10px 28px rgba(15,23,42,.08);
-  padding:18px 18px 16px 18px;
+/* ---------- Shared tokens ---------- */
+:root{
+  --card-radius: 20px;
+  --card-shadow: 0 10px 28px rgba(15,23,42,.08);
+}
+
+/* ---------- White cards via container(border=True) ---------- */
+/* Streamlit draws a border wrapper when border=True; we restyle it to "Lovable card" */
+div[data-testid="stVerticalBlockBorderWrapper"]{
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+div[data-testid="stVerticalBlockBorderWrapper"] > div{
+  border: 0 !important;
+  background:#fff !important;
+  border-radius:var(--card-radius) !important;
+  box-shadow:var(--card-shadow) !important;
+  padding:18px 18px 16px 18px !important;
 }
 
 /* Titles */
@@ -60,8 +73,9 @@ section.main > div{ padding-top:0.10rem; }
 /* ---------- KPI cards ---------- */
 .kpi{
   background:#fff;
-  border-radius:22px;
-  box-shadow:0 10px 28px rgba(15,23,42,.08);
+  border:0;
+  border-radius:var(--card-radius);
+  box-shadow:var(--card-shadow);
   padding:14px 16px;
   min-height:118px;
   display:flex; flex-direction:column; justify-content:center;
@@ -69,17 +83,14 @@ section.main > div{ padding-top:0.10rem; }
 .kpi .t{ font-size:.92rem; color:rgba(2,6,23,.62); margin-bottom:10px; font-weight:850; }
 .kpi .v{ font-size:1.88rem; font-weight:950; color:#0f172a; line-height:1.05; }
 
-/* ---------- Month tiles (equal size, stable gaps) ---------- */
+/* ---------- Month tiles (equal size, content fits) ---------- */
 .tile{
   background:#f1f5f9 !important;
   border:1px solid rgba(15,23,42,.08) !important;
   border-radius:16px !important;
   padding:12px 10px !important;
   text-align:center !important;
-
-  /* stable spacing between tiles */
-  margin:10px 10px !important;
-
+  margin:10px 10px !important;   /* stable gap between all tiles */
   width:100% !important;
   min-height:92px !important;
   display:flex !important;
@@ -126,22 +137,19 @@ div[data-baseweb="slider"] div[role="slider"]{
   background-color:#f59e0b !important;
   border-color:#f59e0b !important;
 }
-div[data-baseweb="slider"] span{
-  color:#f59e0b !important;
-  font-weight:900 !important;
-}
+div[data-baseweb="slider"] span{ color:#f59e0b !important; font-weight:900 !important; }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
-# Brand
+# Brand (left top)
 st.markdown(
     "<div class='brand'><b>☀️ Solar Ninja</b><small>Solar Energy Optimization</small></div>",
     unsafe_allow_html=True,
 )
 
-# Hero
+# Hero (center)
 st.markdown(
     """
 <div class="hero-wrap">
@@ -155,33 +163,31 @@ st.markdown(
 
 left, right = st.columns([0.38, 0.62], gap="large")
 
-# ---------- LEFT: System Parameters (WHITE sn-card) ----------
+# ---------- LEFT: System Parameters (white card) ----------
 with left:
-    st.markdown("<div class='sn-card'>", unsafe_allow_html=True)
-    st.markdown("<div class='section-title'>System Parameters</div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown("<div class='section-title'>System Parameters</div>", unsafe_allow_html=True)
 
-    with st.form("calc_form", border=False):
-        st.markdown("**📍 Location**")
-        latitude = st.number_input("Latitude (°)", value=50.45, format="%.4f")
-        longitude = st.number_input("Longitude (°)", value=30.52, format="%.4f")
+        with st.form("calc_form", border=False):
+            st.markdown("**📍 Location**")
+            latitude = st.number_input("Latitude (°)", value=50.45, format="%.4f")
+            longitude = st.number_input("Longitude (°)", value=30.52, format="%.4f")
 
-        st.divider()
-        st.markdown("**⚡ System power**")
-        system_power_kw = st.number_input("System power (kW)", value=10.0, step=0.5)
+            st.divider()
+            st.markdown("**⚡ System power**")
+            system_power_kw = st.number_input("System power (kW)", value=10.0, step=0.5)
 
-        st.divider()
-        st.markdown("**📐 Panel tilt**")
-        user_tilt = st.slider("Tilt angle (°)", 0, 90, 45)
+            st.divider()
+            st.markdown("**📐 Panel tilt**")
+            user_tilt = st.slider("Tilt angle (°)", 0, 90, 45)
 
-        st.divider()
-        st.markdown("**🧭 Orientation (azimuth)**")
-        user_azimuth = st.slider("Azimuth (°)", 0, 360, 180)
+            st.divider()
+            st.markdown("**🧭 Orientation (azimuth)**")
+            user_azimuth = st.slider("Azimuth (°)", 0, 360, 180)
 
-        submitted = st.form_submit_button("⚡ Calculate", use_container_width=True)
+            submitted = st.form_submit_button("⚡ Calculate", use_container_width=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# ---------- RIGHT: Results ----------
+# ---------- RIGHT: Results (NO big wrapper card) ----------
 with right:
     if submitted or "ui_result" not in st.session_state:
         with st.spinner("Running Solar Ninja calculations…"):
@@ -195,7 +201,7 @@ with right:
 
     out = st.session_state.ui_result
 
-    # Download button (NO white container)
+    # Download (standalone, no container)
     a, b = st.columns([0.70, 0.30])
     with a:
         st.empty()
@@ -213,7 +219,7 @@ with right:
 
     spacer(18)
 
-    # KPI row (NO white container — each KPI is its own white card)
+    # KPI row (standalone)
     k1, k2, k3, k4 = st.columns(4, gap="medium")
     with k1:
         st.markdown(
@@ -238,76 +244,73 @@ with right:
 
     spacer(22)
 
-    # Monthly chart (WHITE sn-card)
-    st.markdown("<div class='sn-card'>", unsafe_allow_html=True)
-    st.markdown("<div class='section-title'>Monthly generation (kWh)</div>", unsafe_allow_html=True)
+    # Monthly chart (white card)
+    with st.container(border=True):
+        st.markdown("<div class='section-title'>Monthly generation (kWh)</div>", unsafe_allow_html=True)
+        df = out.monthly_chart_df
 
-    df = out.monthly_chart_df
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=df["month"],
-            y=df["kwh_user"],
-            name="Your tilt",
-            mode="lines",
-            line=dict(color="#f59e0b", width=3),
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=df["month"],
+                y=df["kwh_user"],
+                name="Your tilt",
+                mode="lines",
+                line=dict(color="#f59e0b", width=3),
+            )
         )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=df["month"],
-            y=df["kwh_optimal_yearly"],
-            name="Optimal tilt",
-            mode="lines",
-            line=dict(color="#22c55e", width=3),
+        fig.add_trace(
+            go.Scatter(
+                x=df["month"],
+                y=df["kwh_optimal_yearly"],
+                name="Optimal tilt",
+                mode="lines",
+                line=dict(color="#22c55e", width=3),
+            )
         )
-    )
-    fig.update_layout(
-        height=370,
-        margin=dict(l=10, r=10, t=10, b=10),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        xaxis=dict(showgrid=False),
-        yaxis=dict(gridcolor="rgba(15,23,42,0.08)"),
-    )
-    st.plotly_chart(fig, use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+        fig.update_layout(
+            height=370,
+            margin=dict(l=10, r=10, t=10, b=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            xaxis=dict(showgrid=False),
+            yaxis=dict(gridcolor="rgba(15,23,42,0.08)"),
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
     spacer(22)
 
-    # Optimal tilt by month (WHITE sn-card)
-    st.markdown("<div class='sn-card'>", unsafe_allow_html=True)
-    st.markdown("<div class='section-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
+    # Optimal tilt by month (white card)
+    with st.container(border=True):
+        st.markdown("<div class='section-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
 
-    m_df = out.tilt_by_month_df
-    months = m_df["Month"].tolist()
-    tilts = m_df["BestTiltDeg"].astype(int).tolist()
+        m_df = out.tilt_by_month_df
+        months = m_df["Month"].tolist()
+        tilts = m_df["BestTiltDeg"].astype(int).tolist()
 
-    spacer(6)
-    row1 = st.columns(6)
-    row2 = st.columns(6)
+        spacer(6)
+        row1 = st.columns(6)
+        row2 = st.columns(6)
 
-    for i in range(min(6, len(months))):
-        with row1[i]:
-            st.markdown(
-                f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
-                unsafe_allow_html=True,
-            )
+        for i in range(min(6, len(months))):
+            with row1[i]:
+                st.markdown(
+                    f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
+                    unsafe_allow_html=True,
+                )
 
-    for i in range(6, min(12, len(months))):
-        with row2[i - 6]:
-            st.markdown(
-                f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
-                unsafe_allow_html=True,
-            )
+        for i in range(6, min(12, len(months))):
+            with row2[i - 6]:
+                st.markdown(
+                    f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
+                    unsafe_allow_html=True,
+                )
 
-    spacer(6)
-    st.markdown("</div>", unsafe_allow_html=True)
+        spacer(6)
 
     spacer(22)
 
-    # Recommendations (WHITE sn-card)
-    st.markdown("<div class='sn-card'>", unsafe_allow_html=True)
-    st.markdown("<div class='section-title'>Recommendations</div>", unsafe_allow_html=True)
-    for r in out.recommendations:
-        st.markdown(f"- {r}")
-    st.markdown("</div>", unsafe_allow_html=True)
+    # Recommendations (white card)
+    with st.container(border=True):
+        st.markdown("<div class='section-title'>Recommendations</div>", unsafe_allow_html=True)
+        for r in out.recommendations:
+            st.markdown(f"- {r}")
