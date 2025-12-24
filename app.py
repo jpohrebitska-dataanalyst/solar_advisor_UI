@@ -9,39 +9,42 @@ from utils.base_model import run_for_ui
 st.set_page_config(page_title="Solar Ninja", page_icon="☀️", layout="wide")
 
 # -------------------------
-# CSS (Lovable-like) - v2
+# CSS (Lovable-like) - v2.1
 # -------------------------
 st.markdown("""
 <style>
-/* Constrain width like Lovable (a bit wider than before) */
+/* App background (grey) */
+.stApp{
+  background: #f6f7fb;
+}
+
+/* Constrain width like Lovable */
 .block-container{
   max-width: 1240px;
   margin: 0 auto;
-  padding-top: 1.2rem;
+  padding-top: 1.1rem;
   padding-bottom: 2.2rem;
 }
 
 /* Hide Streamlit header space */
 header {visibility: hidden; height: 0px;}
+section.main > div {padding-top: 0.15rem;}
 
-/* Reduce top padding caused by Streamlit */
-section.main > div {padding-top: 0.2rem;}
-
-/* Brand */
+/* Brand (bigger) */
 .brand { margin-top: 6px; }
-.brand b { font-size: 1.05rem; }
-.brand small {color: rgba(2,6,23,.6);}
+.brand b { font-size: 1.35rem; font-weight: 950; color:#0f172a; }
+.brand small { display:block; margin-top:2px; font-size: 1.0rem; color: rgba(2,6,23,.62); }
 
-/* Centered hero */
-.hero-wrap{ text-align:center; margin: 14px 0 26px; }
+/* Hero */
+.hero-wrap{ text-align:center; margin: 10px 0 26px; }
 .hero-kicker{
   display:inline-flex; align-items:center; gap:8px;
-  padding:7px 14px; border-radius:999px;
-  background: rgba(245,158,11,0.12);
-  color:#b45309; font-weight:800; font-size:0.9rem;
+  padding:9px 16px; border-radius:999px;
+  background: rgba(245,158,11,0.14);
+  color:#b45309; font-weight:900; font-size:1.02rem;
 }
 .hero-title{
-  font-size:3.7rem;
+  font-size:4.05rem;
   font-weight:950;
   color:#0f172a;
   margin:12px 0 8px;
@@ -50,46 +53,48 @@ section.main > div {padding-top: 0.2rem;}
 .hero-title span{ color:#f59e0b; }
 .hero-sub{
   color:rgba(2,6,23,.65);
-  font-size:1.08rem;
+  font-size:1.10rem;
   margin:0 auto;
-  max-width: 820px;
+  max-width: 900px;
   line-height: 1.45;
 }
 
-/* Panels and cards */
-.panel{
+/* Panels / Cards (white on grey background) */
+.panel, .card{
   background:#fff;
   border:1px solid rgba(15,23,42,.08);
   border-radius:18px;
-  padding:18px;
   box-shadow:0 10px 28px rgba(15,23,42,.06);
 }
-.card{
-  background:#fff;
-  border:1px solid rgba(15,23,42,.08);
-  border-radius:16px;
-  padding:14px 16px;
-  box-shadow:0 10px 28px rgba(15,23,42,.06);
-}
+.panel{ padding:18px; }
+.card{ padding:14px 16px; }
+
 .section-title{
   font-size:1.02rem;
-  font-weight:900;
+  font-weight:950;
   color:#0f172a;
   margin-bottom:12px;
 }
 
-/* KPI */
+/* KPI cards */
 .kpi-card{
-  min-height: 120px;
+  min-height: 118px;
   display:flex;
   flex-direction:column;
-  justify-content:space-between;
+  justify-content:center;
 }
-.card-title{ font-size:.88rem; color:rgba(2,6,23,.6); margin-bottom:6px; }
-.card-value{ font-size:1.75rem; font-weight:950; color:#0f172a; line-height:1.05; }
-.card-sub{ font-size:.82rem; color:rgba(2,6,23,.55); margin-top:6px; }
+.card-title{ font-size:.92rem; color:rgba(2,6,23,.62); margin-bottom:8px; font-weight:800; }
+.card-value{ font-size:1.85rem; font-weight:950; color:#0f172a; line-height:1.05; }
 
-/* Tiles (Lovable grey) */
+/* PDF card */
+.pdf-card{
+  min-height: 86px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+/* Month tiles (grey inside white card) */
 .tile{
   background:#f1f5f9;
   border:1px solid rgba(15,23,42,.08);
@@ -97,10 +102,10 @@ section.main > div {padding-top: 0.2rem;}
   padding:14px 10px;
   text-align:center;
 }
-.tile .m{ font-size:.82rem; color:rgba(2,6,23,.62); }
+.tile .m{ font-size:.84rem; color:rgba(2,6,23,.62); font-weight:700; }
 .tile .v{ font-size:1.18rem; font-weight:950; color:#0f172a; margin-top:4px; }
 
-/* Buttons orange (submit / normal / download) */
+/* Buttons orange */
 .stFormSubmitButton button, .stButton button, .stDownloadButton button{
   background:#f59e0b !important;
   color:#0b1220 !important;
@@ -114,29 +119,42 @@ section.main > div {padding-top: 0.2rem;}
   filter: brightness(0.96);
 }
 
-/* Slider: force orange as much as Streamlit allows */
+/* Sliders: left part orange, right part green (BaseWeb) */
+div[data-baseweb="slider"] > div{
+  /* rail (unfilled) */
+  background-color: #22c55e !important;
+}
+div[data-baseweb="slider"] div[data-testid="stTickBar"]{
+  background: transparent !important;
+}
 div[data-baseweb="slider"] div[role="slider"]{
   background-color:#f59e0b !important;
   border-color:#f59e0b !important;
 }
-div[data-baseweb="slider"] div{
+div[data-baseweb="slider"] div[aria-hidden="true"]{
+  /* often the filled portion */
+  background-color:#f59e0b !important;
+}
+
+/* Fallback selector for filled track (varies by Streamlit versions) */
+div[data-baseweb="slider"] div > div{
   border-color:#f59e0b !important;
 }
 
-/* Remove weird empty "bars"/spacers some themes create */
+/* Remove weird empty spacers */
 div[data-testid="stVerticalBlock"] > div:empty { display:none !important; }
 
-/* Nice spacing helper */
-.spacer-14{ height:14px; }
-.spacer-18{ height:18px; }
+/* Controlled spacers */
+.sp18{ height:18px; }
+.sp22{ height:22px; }
 </style>
 """, unsafe_allow_html=True)
 
 # -------------------------
-# Top brand (left)
+# Brand (left)
 # -------------------------
 st.markdown(
-    "<div class='brand'><b>☀️ Solar Ninja</b><br/><small>Solar Energy Optimization</small></div>",
+    "<div class='brand'><b>☀️ Solar Ninja</b><small>Solar Energy Optimization</small></div>",
     unsafe_allow_html=True
 )
 
@@ -147,7 +165,7 @@ st.markdown("""
 <div class="hero-wrap">
   <div class="hero-kicker">☀️ Optimize your solar system</div>
   <div class="hero-title">Maximize <span>generation</span></div>
-  <div class="hero-sub">Calculate the Optimal Panel Tilt Angle and Get the Accurate Forecast of Annual Generation for Your Location.</div>
+  <div class="hero-sub">Calculate the optimal panel tilt angle and get the accurate forecast of annual generation for your location.</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -157,7 +175,7 @@ st.markdown("""
 left, right = st.columns([0.38, 0.62], gap="large")
 
 # -------------------------
-# LEFT: Inputs (Calculator)
+# LEFT: Inputs (single white card)
 # -------------------------
 with left:
     st.markdown("<div class='panel'>", unsafe_allow_html=True)
@@ -200,45 +218,13 @@ with right:
 
     out = st.session_state.ui_result
 
-    # KPI + PDF button
-    k1, k2, k3, k4 = st.columns([1, 1, 1, 0.92], gap="medium")
+    # --- PDF card ABOVE KPI row ---
+    pdf_sp, pdf_col = st.columns([0.70, 0.30], gap="medium")
+    with pdf_sp:
+        st.markdown("<div></div>", unsafe_allow_html=True)
 
-    with k1:
-        st.markdown(f"""
-        <div class="card kpi-card">
-          <div>
-            <div class="card-title">Optimal angle</div>
-            <div class="card-value">{out.optimal_angle}°</div>
-          </div>
-          <div class="card-sub">Annual optimum</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with k2:
-        st.markdown(f"""
-        <div class="card kpi-card">
-          <div>
-            <div class="card-title">Your generation</div>
-            <div class="card-value">{out.annual_kwh_user:,.0f}</div>
-          </div>
-          <div class="card-sub">kWh / year</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with k3:
-        st.markdown(f"""
-        <div class="card kpi-card">
-          <div>
-            <div class="card-title">Potential</div>
-            <div class="card-value">+{out.potential_pct:.1f}%</div>
-          </div>
-          <div class="card-sub">vs current tilt</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with k4:
-        # Make this look like a "card" button area
-        st.markdown("<div class='card kpi-card' style='display:flex; align-items:center; justify-content:center;'>", unsafe_allow_html=True)
+    with pdf_col:
+        st.markdown("<div class='card pdf-card'>", unsafe_allow_html=True)
         if out.pdf_bytes:
             st.download_button(
                 "⬇️ Download PDF",
@@ -251,9 +237,46 @@ with right:
             st.button("⬇️ Download PDF", disabled=True, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div class='spacer-18'></div>", unsafe_allow_html=True)
+    st.markdown("<div class='sp18'></div>", unsafe_allow_html=True)
 
-    # Monthly generation chart
+    # --- KPI row: 4 cards (Optimal angle / Your / Optimal / Potential) ---
+    k1, k2, k3, k4 = st.columns([1, 1, 1, 1], gap="medium")
+
+    with k1:
+        st.markdown(f"""
+        <div class="card kpi-card">
+          <div class="card-title">Optimal angle</div>
+          <div class="card-value">{out.optimal_angle}°</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with k2:
+        st.markdown(f"""
+        <div class="card kpi-card">
+          <div class="card-title">Your generation</div>
+          <div class="card-value">{out.annual_kwh_user:,.0f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with k3:
+        st.markdown(f"""
+        <div class="card kpi-card">
+          <div class="card-title">Optimal generation</div>
+          <div class="card-value">{out.annual_kwh_optimal:,.0f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with k4:
+        st.markdown(f"""
+        <div class="card kpi-card">
+          <div class="card-title">Potential</div>
+          <div class="card-value">{out.potential_pct:+.1f}%</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<div class='sp22'></div>", unsafe_allow_html=True)
+
+    # --- Card: Monthly generation chart ---
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.markdown("<div class='section-title'>Monthly generation (kWh)</div>", unsafe_allow_html=True)
 
@@ -286,9 +309,9 @@ with right:
     st.plotly_chart(fig, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div class='spacer-18'></div>", unsafe_allow_html=True)
+    st.markdown("<div class='sp22'></div>", unsafe_allow_html=True)
 
-    # Optimal tilt by month
+    # --- Card: Optimal tilt by month (white) + grey month tiles ---
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.markdown("<div class='section-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
 
@@ -315,9 +338,9 @@ with right:
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div class='spacer-18'></div>", unsafe_allow_html=True)
+    st.markdown("<div class='sp22'></div>", unsafe_allow_html=True)
 
-    # Recommendations
+    # --- Card: Recommendations ---
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.markdown("<div class='section-title'>Recommendations</div>", unsafe_allow_html=True)
     for r in out.recommendations:
