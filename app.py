@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from base_model import run_for_ui
+from utils.base_model import run_for_ui
 
 
 # -----------------------------
