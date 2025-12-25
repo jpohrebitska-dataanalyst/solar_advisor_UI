@@ -16,7 +16,8 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 
 def calculate_solar_output(latitude, longitude, system_power_kw, user_tilt):
     """
-    Solar Ninja — Basic Model (Fixed PDF Formatting + Updated Plot Styling)
+    Solar Ninja — Basic Model
+    (Calculations untouched, only Plot Styling updated for White UI)
     """
     # ВИЗНАЧЕННЯ: Втрати системи
     system_losses = 0.18
@@ -123,44 +124,42 @@ def calculate_solar_output(latitude, longitude, system_power_kw, user_tilt):
     })
 
     # ------------------------------------------------------------
-    # 7. Generate Charts (Matplotlib) - UPDATED STYLING
+    # 7. Generate Charts (Matplotlib) - LIGHT THEME STYLING
     # ------------------------------------------------------------
-    # Використовуємо стиль, який добре виглядає і в темній, і в світлій темі
-    # Але робимо його більш "пласким" і сучасним
-    
     plt.rcParams.update({'font.size': 10})
     
-    # Створюємо фігуру з прозорим фоном
+    # Створюємо фігуру
     fig, ax = plt.subplots(figsize=(8, 4), dpi=150)
-    fig.patch.set_alpha(0.0) # Прозорий фон фігури
-    ax.patch.set_alpha(0.0)  # Прозорий фон осей
+    
+    # Прозорий фон, щоб підходило під білий блок
+    fig.patch.set_alpha(0.0) 
+    ax.patch.set_alpha(0.0)
 
-    # Бар-чарт кольору "Solar Ninja Orange" (#FF4B4B - стандартний Streamlit червоний, або помаранчевий #FFA500)
+    # Solar Ninja Orange
     bars = ax.bar(monthly_df["Month"], monthly_df["Energy (kWh)"], color="#FF8C00", zorder=3)
     
-    # Налаштування осей
-    ax.set_title(f"Monthly Energy Output (Tilt = {user_tilt:.1f}°)", color="gray", pad=15, fontweight='bold')
+    # Заголовок і осі - ЧОРНІ (для білого фону сайту)
+    ax.set_title(f"Monthly Energy Output (Tilt = {user_tilt:.1f}°)", color="#333333", pad=15, fontweight='bold')
     ax.set_xlabel("")
-    ax.set_ylabel("Energy (kWh)", color="gray")
+    ax.set_ylabel("Energy (kWh)", color="#333333")
     
-    # Кольори тексту осей
-    ax.tick_params(axis='x', colors='gray', rotation=45)
-    ax.tick_params(axis='y', colors='gray')
+    ax.tick_params(axis='x', colors='#333333', rotation=45)
+    ax.tick_params(axis='y', colors='#333333')
     
-    # Сітка тільки по Y
+    # Сітка
     ax.grid(axis='y', linestyle='--', alpha=0.3, zorder=0, color='gray')
     
-    # Прибираємо рамки зверху і справа (clean aesthetic)
+    # Рамки: прибираємо зайві
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_color('gray')
-    ax.spines['bottom'].set_color('gray')
+    ax.spines['left'].set_color('#cccccc')
+    ax.spines['bottom'].set_color('#cccccc')
 
     plt.tight_layout()
 
-    # Зберігаємо графік у буфер
+    # Зберігаємо
     img_buffer = BytesIO()
-    fig.savefig(img_buffer, format='png', dpi=150, transparent=False) # transparent=False для PDF, щоб не було чорним
+    fig.savefig(img_buffer, format='png', dpi=150, transparent=False)
     img_buffer.seek(0)
 
     # ------------------------------------------------------------
