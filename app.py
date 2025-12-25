@@ -8,23 +8,40 @@ def spacer(px: int = 18):
     st.markdown(f"<div style='height:{px}px'></div>", unsafe_allow_html=True)
 
 
+# -------------------------
+# Page config
+# -------------------------
 st.set_page_config(page_title="Solar Ninja", page_icon="☀️", layout="wide")
 
+# -------------------------
+# CSS (Lovable-like, stable for Streamlit)
+# -------------------------
 st.markdown(
     """
 <style>
-/* ---------- Page ---------- */
+/* Page background */
 .stApp{ background:#f6f7fb; }
-.block-container{ max-width:1240px; margin:0 auto; padding-top:1.05rem; padding-bottom:2.2rem; }
-header{ visibility:hidden; height:0px; }
-section.main > div{ padding-top:0.10rem; }
 
-/* ---------- Brand ---------- */
+/* Constrain width */
+.block-container{
+  max-width:1240px;
+  margin: 0 auto;
+  padding-top: 1.05rem;
+  padding-bottom: 2.2rem;
+}
+
+/* Hide header gap */
+header {visibility: hidden; height: 0px;}
+
+/* Brand */
 .brand{ margin-top:6px; }
 .brand b{ font-size:1.38rem; font-weight:950; color:#0f172a; }
-.brand small{ display:block; margin-top:2px; font-size:1.03rem; color:rgba(2,6,23,.62); }
+.brand small{
+  display:block; margin-top:2px;
+  font-size:1.03rem; color:rgba(2,6,23,.62);
+}
 
-/* ---------- Hero ---------- */
+/* Hero */
 .hero-wrap{ text-align:center; margin:10px 0 26px; }
 .hero-kicker{
   display:inline-flex; align-items:center; gap:8px;
@@ -44,38 +61,31 @@ section.main > div{ padding-top:0.10rem; }
   line-height:1.45;
 }
 
-/* ---------- Shared tokens ---------- */
-:root{
-  --card-radius: 20px;
-  --card-shadow: 0 10px 28px rgba(15,23,42,.08);
-}
-
-/* ---------- White cards via container(border=True) ---------- */
-/* Streamlit draws a border wrapper when border=True; we restyle it to "Lovable card" */
+/* SECTION CONTAINERS: ONLY st.container(border=True) */
 div[data-testid="stVerticalBlockBorderWrapper"]{
-  border-color: transparent !important;
-  background: transparent !important;
-  box-shadow: none !important;
+  background:#ffffff !important;
+  border:0 !important;
+  border-radius:22px !important;
+  box-shadow:0 10px 28px rgba(15,23,42,.08) !important;
+  padding:0 !important;
 }
 div[data-testid="stVerticalBlockBorderWrapper"] > div{
-  border: 0 !important;
-  background:#fff !important;
-  border-radius:var(--card-radius) !important;
-  box-shadow:var(--card-shadow) !important;
   padding:18px 18px 16px 18px !important;
 }
 
-/* Titles */
-.section-title{
-  font-size:1.02rem; font-weight:950; color:#0f172a; margin:0 0 12px 0;
+/* Titles inside containers */
+.sn-title{
+  font-size:1.02rem;
+  font-weight:950;
+  color:#0f172a;
+  margin:0 0 12px 0;
 }
 
-/* ---------- KPI cards ---------- */
+/* KPI cards */
 .kpi{
   background:#fff;
-  border:0;
-  border-radius:var(--card-radius);
-  box-shadow:var(--card-shadow);
+  border-radius:22px;
+  box-shadow:0 10px 28px rgba(15,23,42,.08);
   padding:14px 16px;
   min-height:118px;
   display:flex; flex-direction:column; justify-content:center;
@@ -83,14 +93,13 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div{
 .kpi .t{ font-size:.92rem; color:rgba(2,6,23,.62); margin-bottom:10px; font-weight:850; }
 .kpi .v{ font-size:1.88rem; font-weight:950; color:#0f172a; line-height:1.05; }
 
-/* ---------- Month tiles (equal size, content fits) ---------- */
+/* Month tiles - equal size, content fits */
 .tile{
   background:#f1f5f9 !important;
   border:1px solid rgba(15,23,42,.08) !important;
   border-radius:16px !important;
   padding:12px 10px !important;
   text-align:center !important;
-  margin:10px 10px !important;   /* stable gap between all tiles */
   width:100% !important;
   min-height:92px !important;
   display:flex !important;
@@ -99,19 +108,17 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div{
   align-items:center !important;
 }
 .tile .m{
-  font-size:.78rem;
+  font-size:.74rem;
   color:rgba(2,6,23,.62);
   font-weight:800;
-  line-height:1.1;
-  max-width:90px;
-  display:-webkit-box;
-  -webkit-line-clamp:2;
-  -webkit-box-orient:vertical;
-  overflow:hidden;
+  line-height:1.12;
+  max-width:92px;
+  white-space:normal;
+  word-break:break-word;
 }
 .tile .v{ font-size:1.18rem; font-weight:950; color:#0f172a; margin-top:6px; }
 
-/* ---------- Buttons (force orange) ---------- */
+/* Buttons: force orange (Download + Calculate) */
 div[data-testid="stFormSubmitButton"] button,
 div[data-testid="stDownloadButton"] button,
 div[data-testid="stButton"] button{
@@ -137,19 +144,26 @@ div[data-baseweb="slider"] div[role="slider"]{
   background-color:#f59e0b !important;
   border-color:#f59e0b !important;
 }
-div[data-baseweb="slider"] span{ color:#f59e0b !important; font-weight:900 !important; }
+div[data-baseweb="slider"] span{
+  color:#f59e0b !important;
+  font-weight:900 !important;
+}
 </style>
 """,
     unsafe_allow_html=True,
 )
 
+# -------------------------
 # Brand (left top)
+# -------------------------
 st.markdown(
     "<div class='brand'><b>☀️ Solar Ninja</b><small>Solar Energy Optimization</small></div>",
     unsafe_allow_html=True,
 )
 
+# -------------------------
 # Hero (center)
+# -------------------------
 st.markdown(
     """
 <div class="hero-wrap">
@@ -161,12 +175,17 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# -------------------------
+# Main layout
+# -------------------------
 left, right = st.columns([0.38, 0.62], gap="large")
 
-# ---------- LEFT: System Parameters (white card) ----------
+# -------------------------
+# LEFT: System Parameters (ONE white container)
+# -------------------------
 with left:
     with st.container(border=True):
-        st.markdown("<div class='section-title'>System Parameters</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sn-title'>System Parameters</div>", unsafe_allow_html=True)
 
         with st.form("calc_form", border=False):
             st.markdown("**📍 Location**")
@@ -187,7 +206,9 @@ with left:
 
             submitted = st.form_submit_button("⚡ Calculate", use_container_width=True)
 
-# ---------- RIGHT: Results (NO big wrapper card) ----------
+# -------------------------
+# RIGHT: Results
+# -------------------------
 with right:
     if submitted or "ui_result" not in st.session_state:
         with st.spinner("Running Solar Ninja calculations…"):
@@ -201,8 +222,8 @@ with right:
 
     out = st.session_state.ui_result
 
-    # Download (standalone, no container)
-    a, b = st.columns([0.70, 0.30])
+    # Download button (NO container, just right-aligned)
+    a, b = st.columns([0.72, 0.28])
     with a:
         st.empty()
     with b:
@@ -217,9 +238,9 @@ with right:
         else:
             st.button("⬇️ Download PDF", disabled=True, use_container_width=True)
 
-    spacer(18)
+    spacer(16)
 
-    # KPI row (standalone)
+    # KPI row
     k1, k2, k3, k4 = st.columns(4, gap="medium")
     with k1:
         st.markdown(
@@ -242,13 +263,13 @@ with right:
             unsafe_allow_html=True,
         )
 
-    spacer(22)
+    spacer(18)
 
-    # Monthly chart (white card)
+    # Monthly chart container (white)
     with st.container(border=True):
-        st.markdown("<div class='section-title'>Monthly generation (kWh)</div>", unsafe_allow_html=True)
-        df = out.monthly_chart_df
+        st.markdown("<div class='sn-title'>Monthly generation (kWh)</div>", unsafe_allow_html=True)
 
+        df = out.monthly_chart_df
         fig = go.Figure()
         fig.add_trace(
             go.Scatter(
@@ -277,19 +298,19 @@ with right:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    spacer(22)
+    spacer(18)
 
-    # Optimal tilt by month (white card)
+    # Optimal tilt by month container (white)
     with st.container(border=True):
-        st.markdown("<div class='section-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sn-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
 
         m_df = out.tilt_by_month_df
         months = m_df["Month"].tolist()
         tilts = m_df["BestTiltDeg"].astype(int).tolist()
 
-        spacer(6)
-        row1 = st.columns(6)
-        row2 = st.columns(6)
+        # Use columns with consistent gaps
+        row1 = st.columns(6, gap="small")
+        row2 = st.columns(6, gap="small")
 
         for i in range(min(6, len(months))):
             with row1[i]:
@@ -305,12 +326,10 @@ with right:
                     unsafe_allow_html=True,
                 )
 
-        spacer(6)
+    spacer(18)
 
-    spacer(22)
-
-    # Recommendations (white card)
+    # Recommendations container (white)
     with st.container(border=True):
-        st.markdown("<div class='section-title'>Recommendations</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sn-title'>Recommendations</div>", unsafe_allow_html=True)
         for r in out.recommendations:
             st.markdown(f"- {r}")
