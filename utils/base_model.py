@@ -174,4 +174,217 @@ def _build_recommendations(
         # Jun-Aug
         summer = [monthly_opt_tilt[i] for i in [5, 6, 7] if monthly_opt_tilt[i] is not None]
         # Dec-Feb
-        winter = [mon]()
+        winter = [monthly_opt_tilt[i] for i in [11, 0, 1] if monthly_opt_tilt[i] is not None]
+        if summer and winter:
+            recs.append(
+                f"For maximum efficiency, consider seasonal adjustment: summer ~{int(round(float(np.mean(summer))))}°, winter ~{int(round(float(np.mean(winter))))}°."
+            )
+    except Exception:
+        pass
+
+    if 90 <= azimuth <= 270:
+        recs.append(f"South-facing orientation (azimuth {int(round(azimuth))}°) is usually optimal for the Northern Hemisphere.")
+    else:
+        recs.append("Consider orienting panels toward the south for higher annual yield (Northern Hemisphere).")
+
+    recs.append("Regularly clean panels from dust and snow to maintain maximum efficiency.")
+    return recs
+
+
+def _build_pdf_bytes(
+    title: str,
+    lat: float,
+    lon: float,
+    system_power_kw: float,
+    your_tilt: float,
+    azimuth: float,
+    optimal_tilt: float,
+    your_annual: float,
+    opt_annual: float,
+    potential_pct: float,
+    fig,
+    recommendations: List[str],
+) -> Optional[bytes]:
+    """
+    Optional PDF generation. If reportlab is not available, returns None.
+    """
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.utils import ImageReader
+    except Exception:
+        return None
+
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    width, height = A4
+
+    # Header
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(40, height - 50, title)
+
+    c.setFont("Helvetica", 10)
+    c.drawString(40, height - 70, f"Location: {lat:.4f}, {lon:.4f} | Power: {system_power_kw:.2f} kW")
+    c.drawString(40, height - 85, f"Your tilt: {your_tilt:.0f}° | Azimuth: {azimuth:.0f}° | Optimal tilt: {optimal_tilt:.0f}°")
+
+    # KPIs
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, height - 115, "Key results")
+    c.setFont("Helvetica", 10)
+    c.drawString(40, height - 132, f"Your annual generation: {your_annual:,.0f} kWh/year".replace(",", " "))
+    c.drawString(40, height - 147, f"Optimal annual generation: {opt_annual:,.0f} kWh/year".replace(",", " "))
+    c.drawString(40, height - 162, f"Potential: {potential_pct:+.1f}%")
+
+    # Plot image
+    img_buf = BytesIO()
+    fig.savefig(img_buf, format="png", bbox_inches="tight")
+    img_buf.seek(0)
+    img = ImageReader(img_buf)
+
+    # place chart
+    chart_w = width - 80
+    chart_h = 260
+    c.drawImage(img, 40, height - 460, width=chart_w, height=chart_h, preserveAspectRatio=True, mask='auto')
+
+    # Recommendations
+    y = height - 500
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Recommendations")
+    y -= 18
+    c.setFont("Helvetica", 10)
+    for r in recommendations[:6]:
+        # simple wrap
+        text = r.strip()
+        while len(text) > 95:
+            c.drawString(55, y, u"\u2022 " + text[:95])
+            text = text[95:]
+            y -= 14
+        c.drawString(55, y, u"\u2022 " + text)
+        y -= 16
+        if y < 60:
+            c.showPage()
+            y = height - 60
+            c.setFont("Helvetica", 10)
+
+    c.showPage()
+    c.save()
+
+    buf.seek(0)
+    return buf.getvalue()
+
+
+# -----------------------------
+# Public API for Streamlit UI
+# -----------------------------
+def run_for_ui(
+    lat: float,
+    lon: float,
+    system_power_kw: float,
+    tilt_deg: float,
+    azimuth_deg: float,
+    cfg: Optional[ModelConfig] = None,
+) -> Dict[str, Any]:
+    """
+    Main function called from app.py.
+
+    Returns dict:
+      - optimal_angle
+      - your_generation
+      - optimal_generation
+      - potential_pct
+      - monthly_df   (month, your, optimal)
+      - monthly_opt_tilt (12 values)
+      - recommendations (list)
+      - monthly_fig (matplotlib fig)
+      - pdf_bytes (bytes or None)
+      - your_tilt
+    """
+    cfg = cfg or ModelConfig()
+
+    # inputs guard
+    lat = float(lat)
+    lon = float(lon)
+    system_power_kw = max(0.1, float(system_power_kw))
+    tilt_deg = float(tilt_deg)
+    azimuth_deg = float(azimuth_deg)
+
+    loc, times, solpos, cs = _clearsky_inputs(lat, lon, cfg)
+
+    # your tilt energy
+    poa_your = _poa_global(tilt_deg, azimuth_deg, solpos, cs)
+    e_your = _energy_kwh_from_poa(poa_your, system_power_kw, cfg.losses)
+
+    # optimal annual tilt
+    best_tilt, best_energy = _optimize_tilt_for_period(solpos, cs, system_power_kw, azimuth_deg, cfg, mask=None)
+
+    poa_opt = _poa_global(best_tilt, azimuth_deg, solpos, cs)
+    e_opt = _energy_kwh_from_poa(poa_opt, system_power_kw, cfg.losses)
+
+    your_annual = _annual_sum(e_your)
+    opt_annual = _annual_sum(e_opt)
+
+    potential_pct = 0.0
+    if your_annual > 0:
+        potential_pct = (opt_annual / your_annual - 1.0) * 100.0
+
+    # monthly series
+    m_your = _monthly_sum(e_your)
+    m_opt = _monthly_sum(e_opt)
+
+    # ensure 12 months
+    m_your = m_your.reindex(pd.date_range(m_your.index.min(), periods=12, freq="MS", tz=cfg.tz)).fillna(0)
+    m_opt = m_opt.reindex(pd.date_range(m_opt.index.min(), periods=12, freq="MS", tz=cfg.tz)).fillna(0)
+
+    # monthly optimal tilts
+    monthly_opt_tilt = _build_monthly_optimal_tilts(times, solpos, cs, system_power_kw, azimuth_deg, cfg)
+
+    # recommendations
+    recs = _build_recommendations(
+        your_tilt=tilt_deg,
+        optimal_tilt=float(best_tilt),
+        azimuth=azimuth_deg,
+        potential_pct=float(potential_pct),
+        monthly_opt_tilt=monthly_opt_tilt,
+        losses=cfg.losses,
+    )
+
+    # chart
+    fig = _make_monthly_plot(m_your, m_opt)
+
+    # monthly df for fallback
+    monthly_df = pd.DataFrame(
+        {
+            "month": m_your.index.month,
+            "your": m_your.values,
+            "optimal": m_opt.values,
+        }
+    )
+
+    # pdf bytes (optional)
+    pdf_bytes = _build_pdf_bytes(
+        title="Solar Ninja — Report",
+        lat=lat,
+        lon=lon,
+        system_power_kw=system_power_kw,
+        your_tilt=tilt_deg,
+        azimuth=azimuth_deg,
+        optimal_tilt=float(best_tilt),
+        your_annual=your_annual,
+        opt_annual=opt_annual,
+        potential_pct=float(potential_pct),
+        fig=fig,
+        recommendations=recs,
+    )
+
+    return {
+        "optimal_angle": float(best_tilt),
+        "your_tilt": float(tilt_deg),
+        "your_generation": float(your_annual),
+        "optimal_generation": float(opt_annual),
+        "potential_pct": float(potential_pct),
+        "monthly_df": monthly_df,
+        "monthly_opt_tilt": monthly_opt_tilt,
+        "recommendations": recs,
+        "monthly_fig": fig,
+        "pdf_bytes": pdf_bytes,
+    }
