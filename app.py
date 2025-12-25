@@ -1,6 +1,6 @@
+# app.py
 import streamlit as st
 import plotly.graph_objects as go
-import pandas as pd
 
 from utils.base_model import run_for_ui
 
@@ -10,200 +10,189 @@ from utils.base_model import run_for_ui
 st.set_page_config(page_title="Solar Ninja", page_icon="☀️", layout="wide")
 
 # -------------------------
-# CSS (Lovable-like)
+# CSS (Lovable-like v2)
 # -------------------------
 st.markdown(
     """
 <style>
-/* Page background */
-html, body, [data-testid="stAppViewContainer"]{
-  background: #f6f7fb !important;
+:root{
+  --sn-bg:#f6f7fb;
+  --sn-white:#ffffff;
+  --sn-text:#0f172a;
+  --sn-muted:rgba(2,6,23,.62);
+  --sn-border:rgba(15,23,42,.08);
+  --sn-shadow:0 16px 40px rgba(15,23,42,.08);
+  --sn-orange:#f59e0b;
+  --sn-green:#22c55e;
 }
 
-/* Constrain width like Lovable */
+/* App background */
+.stApp{ background: var(--sn-bg) !important; }
+
+/* Width like Lovable */
 .block-container{
   max-width: 1120px;
   margin: 0 auto;
-  padding-top: 1.2rem;
-  padding-bottom: 2.2rem;
+  padding-top: 1.6rem;
+  padding-bottom: 3rem;
 }
 
-/* Hide Streamlit header space */
+/* Hide Streamlit chrome */
 header {visibility: hidden; height: 0px;}
+footer {visibility: hidden; height: 0px;}
 #MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
 
 /* Brand */
-.sn-brand{
-  margin-top: 6px;
-  margin-bottom: 6px;
-}
-.sn-brand .t{
-  font-size: 1.35rem;
-  font-weight: 900;
-  color:#0f172a;
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-.sn-brand .s{
-  margin-top: 4px;
-  font-size: 1.02rem;
-  color: rgba(2,6,23,.62);
-}
+.sn-brand{ margin: 4px 0 10px; }
+.sn-brand .t{ font-size: 1.45rem; font-weight: 950; color: var(--sn-text); }
+.sn-brand .s{ font-size: 1.02rem; color: var(--sn-muted); margin-top: 2px; }
 
 /* Hero */
-.sn-hero{ text-align:center; margin: 18px 0 10px; }
+.sn-hero{ text-align:center; margin: 22px 0 18px; }
 .sn-kicker{
-  display:inline-flex; align-items:center; gap:8px;
-  padding:8px 16px; border-radius:999px;
+  display:inline-flex; align-items:center; gap:10px;
+  padding:10px 16px; border-radius:999px;
   background: rgba(245,158,11,0.14);
-  color:#b45309; font-weight:800; font-size:1rem;
+  color:#b45309; font-weight:900; font-size:0.95rem;
 }
 .sn-title{
-  margin: 14px 0 6px;
-  font-size: 4.0rem;
-  font-weight: 950;
-  color:#0f172a;
-  letter-spacing:-0.02em;
+  font-size:4.1rem; font-weight:1000; letter-spacing:-0.04em;
+  color:var(--sn-text); margin:12px 0 8px;
 }
-.sn-title span{ color:#f59e0b; }
+.sn-title span{ color: var(--sn-orange); }
 .sn-sub{
-  margin: 0 auto;
-  max-width: 860px;
   color: rgba(2,6,23,.62);
-  font-size: 1.1rem;
-  line-height: 1.55;
+  font-size: 1.08rem;
+  margin: 0 auto;
+  max-width: 760px;
 }
 
-/* ONLY the 4 required white containers (explicit wrappers) */
-.sn-card{
-  background:#ffffff;
+/* Big white sections (ONLY what we wrap) */
+.sn-section{
+  background: var(--sn-white) !important;
   border: 1px solid rgba(15,23,42,.06);
-  border-radius: 22px;
-  box-shadow: 0 14px 40px rgba(15,23,42,.06);
-  padding: 18px 18px;
+  border-radius: 28px;
+  box-shadow: var(--sn-shadow);
+  padding: 22px 22px;
 }
-.sn-card-title{
-  font-size: 1.05rem;
-  font-weight: 900;
-  color:#0f172a;
+.sn-section-title{
+  font-size: 1.08rem;
+  font-weight: 950;
+  color: var(--sn-text);
   margin-bottom: 10px;
 }
 
 /* KPI cards */
 .sn-kpi{
-  background:#ffffff;
+  background: var(--sn-white);
   border: 1px solid rgba(15,23,42,.06);
-  border-radius: 20px;
-  box-shadow: 0 10px 26px rgba(15,23,42,.06);
+  border-radius: 24px;
+  box-shadow: 0 12px 28px rgba(15,23,42,.07);
   padding: 16px 18px;
-  height: 110px;
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
+  min-height: 92px;
 }
-.sn-kpi .k{
-  font-size: .9rem;
-  color: rgba(2,6,23,.62);
-  font-weight: 700;
-  margin-bottom: 6px;
-}
+.sn-kpi .k{ font-size:.92rem; font-weight:850; color: rgba(2,6,23,.62); }
 .sn-kpi .v{
-  font-size: 2.0rem;
-  font-weight: 950;
-  color:#0f172a;
-  line-height: 1.05;
+  margin-top: 8px;
+  font-size: 1.95rem;
+  font-weight: 1000;
+  color: var(--sn-text);
+  letter-spacing: -0.02em;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .sn-kpi .sub{
-  font-size:.85rem;
+  margin-top: 6px;
+  font-size: .88rem;
   color: rgba(2,6,23,.55);
-  margin-top: 6px;
 }
 
-/* Download button wrapper (NO container frame!) */
-.sn-download-wrap{
-  display:flex;
-  justify-content:flex-end;
-  align-items:flex-start;
-  margin-top: 2px;
-  margin-bottom: 10px;
-}
-
-/* Tiles grid */
-.sn-tiles{
-  display:grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 14px;
-}
-@media (max-width: 980px){
-  .sn-tiles{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-.sn-tile{
-  background:#f1f5f9;
-  border: 1px solid rgba(15,23,42,.06);
-  border-radius: 18px;
-  height: 82px;
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  align-items:center;
-  text-align:center;
-}
-.sn-tile .m{
-  font-size: .78rem;
-  font-weight: 800;
-  color: rgba(2,6,23,.62);
-  line-height: 1.1;
-}
-.sn-tile .d{
-  margin-top: 6px;
-  font-size: 1.25rem;
-  font-weight: 950;
-  color:#0f172a;
-  line-height: 1;
-}
-
-/* Orange buttons (Calculate + Download) */
-.stFormSubmitButton button,
-.stButton button,
+/* Download button: no extra frame (we won't wrap it in a card) */
 .stDownloadButton button{
-  background:#f59e0b !important;
-  color:#0b1220 !important;
-  border: 0px solid transparent !important;
+  background: var(--sn-orange) !important;
+  color: #0b1220 !important;
+  border: 1px solid rgba(15,23,42,.10) !important;
   border-radius: 16px !important;
   font-weight: 950 !important;
-  padding: 0.70rem 1.05rem !important;
-  box-shadow: 0 10px 22px rgba(245,158,11,.20) !important;
+  padding: 0.75rem 1.05rem !important;
+  box-shadow: 0 10px 24px rgba(245,158,11,.22) !important;
 }
-.stFormSubmitButton button:hover,
-.stButton button:hover,
-.stDownloadButton button:hover{
-  filter: brightness(0.97);
+.stDownloadButton button:hover{ filter: brightness(0.98); }
+
+/* Calculate + all buttons */
+.stFormSubmitButton button, .stButton button{
+  background: var(--sn-orange) !important;
+  color: #0b1220 !important;
+  border: 1px solid rgba(15,23,42,.10) !important;
+  border-radius: 16px !important;
+  font-weight: 950 !important;
+  padding: 0.75rem 1.05rem !important;
+  box-shadow: 0 10px 24px rgba(245,158,11,.18) !important;
+}
+.stFormSubmitButton button:hover, .stButton button:hover{ filter: brightness(0.98); }
+
+/* Inputs a bit cleaner on white */
+div[data-testid="stNumberInput"] input{
+  background: rgba(15,23,42,.03) !important;
+  border: 1px solid rgba(15,23,42,.06) !important;
+  border-radius: 14px !important;
 }
 
-/* Slider thumb */
-div[data-baseweb="slider"] div[role="slider"]{
-  background-color:#f59e0b !important;
-  border-color:#f59e0b !important;
-  box-shadow: 0 0 0 3px rgba(245,158,11,.25) !important;
-}
-
-/* Slider track attempt: orange filled + green remaining (BaseWeb). 
-   Streamlit/BaseWeb markup varies, so we apply multiple selectors. */
+/* Slider styling (orange filled / green rest) */
 div[data-baseweb="slider"] div[aria-hidden="true"]{
-  background: #22c55e !important;            /* remaining */
+  background: var(--sn-green) !important;     /* unfilled (to the right) */
+  border-radius: 999px !important;
 }
 div[data-baseweb="slider"] div[aria-hidden="true"] > div{
-  background: #f59e0b !important;            /* filled */
+  background: var(--sn-orange) !important;    /* filled (to the left) */
+  border-radius: 999px !important;
+}
+div[data-baseweb="slider"] div[role="slider"]{
+  background: var(--sn-orange) !important;
+  border-color: var(--sn-orange) !important;
+}
+div[data-baseweb="slider"] span{
+  color: var(--sn-orange) !important;
+  font-weight: 900 !important;
 }
 
-/* Remove weird "empty bars" from Streamlit */
-hr { border-top: 1px solid rgba(15,23,42,.08); }
+/* Month tiles grid (equal size + stable gaps) */
+.sn-tiles{
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+  margin-top: 12px;
+}
+@media (max-width: 980px){
+  .sn-tiles{ grid-template-columns: repeat(3, 1fr); }
+}
+.sn-tile{
+  background: #f1f5f9;
+  border: 1px solid rgba(15,23,42,.06);
+  border-radius: 20px;
+  padding: 14px 10px;
+  text-align: center;
+  min-height: 74px;
+}
+.sn-tile .m{
+  font-size: .80rem;
+  font-weight: 800;
+  color: rgba(2,6,23,.60);
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+.sn-tile .d{
+  font-size: 1.22rem;
+  font-weight: 1000;
+  color: var(--sn-text);
+  line-height: 1.0;
+  white-space: nowrap;
+}
 
-/* Tighter markdown spacing inside cards */
-[data-testid="stMarkdownContainer"] p { margin-bottom: 0.35rem; }
+/* Plotly background inside white card */
+.js-plotly-plot, .plot-container{
+  background: transparent !important;
+}
 </style>
 """,
     unsafe_allow_html=True,
@@ -237,16 +226,19 @@ st.markdown(
 )
 
 # -------------------------
-# Layout
+# Main layout
 # -------------------------
 left, right = st.columns([0.40, 0.60], gap="large")
 
+# Avoid unbound variable on first run
+submitted = False
+
 # -------------------------
-# LEFT: System Parameters (WHITE container #1)
+# LEFT: System Parameters (white container)
 # -------------------------
 with left:
-    st.markdown("<div class='sn-card'>", unsafe_allow_html=True)
-    st.markdown("<div class='sn-card-title'>System Parameters</div>", unsafe_allow_html=True)
+    st.markdown('<div class="sn-section">', unsafe_allow_html=True)
+    st.markdown('<div class="sn-section-title">System Parameters</div>', unsafe_allow_html=True)
 
     with st.form("calc_form", border=False):
         st.markdown("**📍 Location**")
@@ -254,14 +246,17 @@ with left:
         longitude = st.number_input("Longitude (°)", value=30.52, format="%.4f")
 
         st.divider()
+
         st.markdown("**⚡ System power**")
         system_power_kw = st.number_input("System power (kW)", value=10.0, step=0.5)
 
         st.divider()
+
         st.markdown("**📐 Panel tilt**")
         user_tilt = st.slider("Tilt angle (°)", 0, 90, 45)
 
         st.divider()
+
         st.markdown("**🧭 Orientation (azimuth)**")
         user_azimuth = st.slider("Azimuth (°)", 0, 360, 180)
 
@@ -270,10 +265,10 @@ with left:
     st.markdown("</div>", unsafe_allow_html=True)
 
 # -------------------------
-# RIGHT: Results + Cards
+# RIGHT: Results
 # -------------------------
 with right:
-    # Run calculations
+    # Run calc only when submitted, or on very first load
     if submitted or "ui_result" not in st.session_state:
         with st.spinner("Running Solar Ninja calculations…"):
             st.session_state.ui_result = run_for_ui(
@@ -286,20 +281,23 @@ with right:
 
     out = st.session_state.ui_result
 
-    # Download (NO container frame)
-    st.markdown("<div class='sn-download-wrap'>", unsafe_allow_html=True)
-    if out.pdf_bytes:
-        st.download_button(
-            "⬇️ Download PDF",
-            data=out.pdf_bytes,
-            file_name="solar_ninja_generation_report.pdf",
-            mime="application/pdf",
-        )
-    else:
-        st.button("⬇️ Download PDF", disabled=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    # Top row: Download PDF (no container/frame)
+    top_l, top_r = st.columns([0.62, 0.38], gap="small")
+    with top_r:
+        if out.pdf_bytes:
+            st.download_button(
+                "⬇️ Download PDF",
+                data=out.pdf_bytes,
+                file_name="solar_ninja_generation_report.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        else:
+            st.button("⬇️ Download PDF", disabled=True, use_container_width=True)
 
-    # KPI row
+    st.write("")
+
+    # KPI row (4 cards)
     k1, k2, k3, k4 = st.columns(4, gap="medium")
 
     with k1:
@@ -351,9 +349,9 @@ with right:
 
     st.write("")
 
-    # WHITE container #2: Monthly generation chart
-    st.markdown("<div class='sn-card'>", unsafe_allow_html=True)
-    st.markdown("<div class='sn-card-title'>Monthly generation (kWh)</div>", unsafe_allow_html=True)
+    # Monthly generation (white container)
+    st.markdown('<div class="sn-section">', unsafe_allow_html=True)
+    st.markdown('<div class="sn-section-title">Monthly generation (kWh)</div>', unsafe_allow_html=True)
 
     df = out.monthly_chart_df
 
@@ -384,7 +382,7 @@ with right:
         xaxis=dict(showgrid=False),
         yaxis=dict(gridcolor="rgba(15,23,42,0.08)"),
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="#ffffff",
+        plot_bgcolor="rgba(0,0,0,0)",
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -392,28 +390,27 @@ with right:
 
     st.write("")
 
-    # WHITE container #3: Optimal tilt by month
-    st.markdown("<div class='sn-card'>", unsafe_allow_html=True)
-    st.markdown("<div class='sn-card-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
+    # Optimal tilt by month (white container + equal tiles)
+    st.markdown('<div class="sn-section">', unsafe_allow_html=True)
+    st.markdown('<div class="sn-section-title">Optimal tilt by month</div>', unsafe_allow_html=True)
 
-    m_df = out.tilt_by_month_df.copy()  # Month, BestTiltDeg
-    # Use abbreviations to guarantee equal tile sizes & no wrapping issues
-    m_df["MonthShort"] = pd.to_datetime(m_df["Month"], format="%B").dt.strftime("%b")
-    tiles_html = ["<div class='sn-tiles'>"]
-    for _, r in m_df.iterrows():
-        tiles_html.append(
-            f"<div class='sn-tile'><div class='m'>{r['MonthShort']}</div><div class='d'>{int(r['BestTiltDeg'])}°</div></div>"
-        )
-    tiles_html.append("</div>")
-    st.markdown("\n".join(tiles_html), unsafe_allow_html=True)
+    m_df = out.tilt_by_month_df  # columns: Month, BestTiltDeg
+    months = m_df["Month"].tolist()
+    tilts = m_df["BestTiltDeg"].astype(int).tolist()
 
+    tiles_html = '<div class="sn-tiles">'
+    for m, t in zip(months, tilts):
+        tiles_html += f'<div class="sn-tile"><div class="m">{m}</div><div class="d">{t}°</div></div>'
+    tiles_html += "</div>"
+
+    st.markdown(tiles_html, unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.write("")
 
-    # WHITE container #4: Recommendations
-    st.markdown("<div class='sn-card'>", unsafe_allow_html=True)
-    st.markdown("<div class='sn-card-title'>Recommendations</div>", unsafe_allow_html=True)
+    # Recommendations (white container)
+    st.markdown('<div class="sn-section">', unsafe_allow_html=True)
+    st.markdown('<div class="sn-section-title">Recommendations</div>', unsafe_allow_html=True)
     for r in out.recommendations:
         st.markdown(f"- {r}")
     st.markdown("</div>", unsafe_allow_html=True)
