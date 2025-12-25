@@ -1,25 +1,32 @@
+# utils/base_model.py
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import List, Optional, Dict
+
 import pandas as pd
 import numpy as np
-from dataclasses import dataclass
-from typing import List, Optional
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
 from io import BytesIO
 
 from pvlib.location import Location
 from pvlib import irradiance
 
-import matplotlib.pyplot as plt
-
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as PDFImage
-
-
-MONTH_NAMES = [
-    "January","February","March","April","May","June",
-    "July","August","September","October","November","December"
-]
-MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+    Image as PDFImage,
+)
 
 
 @dataclass
@@ -28,15 +35,17 @@ class UIOutput:
     annual_kwh_user: float
     annual_kwh_optimal: float
     potential_pct: float
-    monthly_chart_df: pd.DataFrame      # month, kwh_user, kwh_optimal_yearly
-    tilt_by_month_df: pd.DataFrame      # Month, BestTiltDeg
+    monthly_chart_df: pd.DataFrame     # month, kwh_user, kwh_optimal_yearly
+    tilt_by_month_df: pd.DataFrame     # Month, BestTiltDeg (Month should be short to fit)
     recommendations: List[str]
     pdf_bytes: Optional[bytes]
 
 
-def _month_index_series(values_by_month: dict) -> pd.Series:
-    """values_by_month: {1..12 -> value}"""
-    return pd.Series([values_by_month[m] for m in range(1, 13)], index=pd.Index(range(1, 13), name="month"))
+def _format_kwh(x: float) -> str:
+    try:
+        return f"{float(x):,.0f}"
+    except Exception:
+        return str(x)
 
 
 def calculate_solar_output(
@@ -45,22 +54,27 @@ def calculate_solar_output(
     system_power_kw: float,
     user_tilt: float,
     user_azimuth: float,
-) -> dict:
-    # Assumptions
-    system_losses = 0.18
-    timezone = "UTC"
+    year: int = 2025,
+    system_losses: float = 0.18,
+    timezone: str = "UTC",
+) -> Dict[str, object]:
+    """
+    Simplified PV estimate (clearsky GHI + AOI cosine).
+    Returns monthly series for:
+      - user tilt
+      - annual optimal tilt (single tilt for whole year)
+      - monthly optimal tilt (tilt changes each month)
+    """
 
-    # Hourly times for the year
-    times = pd.date_range("2025-01-01 00:00", "2025-12-31 23:00", freq="1h", tz=timezone)
+    times = pd.date_range(f"{year}-01-01", f"{year}-12-31 23:00", freq="1h", tz=timezone)
 
     location = Location(latitude=latitude, longitude=longitude, tz=timezone)
     solar_position = location.get_solarposition(times)
 
     clearsky = location.get_clearsky(times, model="ineichen")
-    ghi = clearsky["ghi"].clip(lower=0)         # W/m2
-    ghi_kw = (ghi / 1000.0).astype(float)       # kW/m2
+    ghi = clearsky["ghi"].clip(lower=0) / 1000.0  # kW/m2 proxy
 
-    # Compute hourly energy for tilts 0..90
+    # Compute hourly energy for all tilts 0..90 (integer)
     tilts = range(0, 91)
     hourly_energy = {}
 
@@ -71,24 +85,33 @@ def calculate_solar_output(
             solar_zenith=solar_position["apparent_zenith"],
             solar_azimuth=solar_position["azimuth"],
         )
-        cos_aoi = np.cos(np.radians(aoi)).astype(float)
+        cos_aoi = np.cos(np.radians(aoi))
         cos_aoi = np.where(cos_aoi < 0, 0, cos_aoi)
-        poa = ghi_kw.values * cos_aoi * (1 - system_losses)   # kW/m2 (simplified)
-        hourly_energy[f"tilt_{t}"] = poa * system_power_kw    # kWh per hour (approx)
+
+        # Simple POA proxy + system losses
+        poa = ghi * cos_aoi * (1 - system_losses)
+
+        # kWh per hour (since timestep is 1 hour)
+        hourly_energy[f"tilt_{t}"] = poa * system_power_kw
 
     df_energy = pd.DataFrame(hourly_energy, index=times)
 
-    # Monthly sums per tilt (rows: month 1..12)
-    monthly_sum = df_energy.groupby(df_energy.index.month).sum()
-
-    # Best tilt per month
+    # Monthly best tilt
+    monthly_sum = df_energy.resample("M").sum()
     best_cols = monthly_sum.idxmax(axis=1)
     best_tilts = best_cols.str.replace("tilt_", "", regex=False).astype(int)
 
-    monthly_best = pd.DataFrame({
-        "Month": [MONTH_NAMES[m - 1] for m in monthly_sum.index],
-        "BestTiltDeg": best_tilts.values
-    })
+    # Use short months for UI tiles (prevents wrapping)
+    month_short = monthly_sum.index.strftime("%b")  # Jan, Feb...
+    month_full = monthly_sum.index.strftime("%B")
+
+    monthly_best = pd.DataFrame(
+        {
+            "Month": month_short,
+            "MonthFull": month_full,
+            "BestTiltDeg": best_tilts.values,
+        }
+    )
 
     # Annual optimal tilt
     annual_sum = df_energy.sum()
@@ -96,59 +119,59 @@ def calculate_solar_output(
     annual_optimal_tilt = int(str(annual_opt_col).replace("tilt_", ""))
     annual_energy_optimal = float(annual_sum.max())
 
-    # User tilt hourly energy
+    # User tilt energy (allow non-integer tilt)
     aoi_user = irradiance.aoi(
         surface_tilt=user_tilt,
         surface_azimuth=user_azimuth,
         solar_zenith=solar_position["apparent_zenith"],
         solar_azimuth=solar_position["azimuth"],
     )
-    cos_user = np.cos(np.radians(aoi_user)).astype(float)
+    cos_user = np.cos(np.radians(aoi_user))
     cos_user = np.where(cos_user < 0, 0, cos_user)
-    poa_user = ghi_kw.values * cos_user * (1 - system_losses)
-    hourly_user = pd.Series(poa_user * system_power_kw, index=times)
+    poa_user = ghi * cos_user * (1 - system_losses)
+    hourly_user = poa_user * system_power_kw
 
-    monthly_user = hourly_user.groupby(hourly_user.index.month).sum()
+    monthly_user = hourly_user.resample("M").sum()
     annual_energy_user = float(hourly_user.sum())
 
-    # Optimal yearly tilt monthly generation
-    monthly_opt_yearly = df_energy[f"tilt_{annual_optimal_tilt}"].groupby(df_energy.index.month).sum()
+    # Annual-optimal tilt monthly generation
+    monthly_opt_yearly = df_energy[f"tilt_{annual_optimal_tilt}"].resample("M").sum()
 
-    # Optimal monthly-changing tilt generation
-    monthly_opt_monthly_vals = {}
-    for m in range(1, 13):
-        best_tilt_m = int(monthly_best.loc[m - 1, "BestTiltDeg"])
-        monthly_opt_monthly_vals[m] = float(df_energy.loc[df_energy.index.month == m, f"tilt_{best_tilt_m}"].sum())
+    # Monthly-changing tilt generation
+    monthly_opt_monthly_vals = []
+    for i, dt in enumerate(monthly_opt_yearly.index):
+        best_tilt_m = int(monthly_best.loc[i, "BestTiltDeg"])
+        mask = df_energy.index.month == dt.month
+        monthly_opt_monthly_vals.append(float(df_energy.loc[mask, f"tilt_{best_tilt_m}"].sum()))
+    monthly_opt_monthly = pd.Series(monthly_opt_monthly_vals, index=monthly_opt_yearly.index)
 
-    monthly_opt_monthly = _month_index_series(monthly_opt_monthly_vals)
-
-    # Potential
     potential_pct = 0.0
     if annual_energy_user > 0:
         potential_pct = (annual_energy_optimal - annual_energy_user) / annual_energy_user * 100.0
 
-    # Recommendations
     recs = [
-        f"Your current tilt angle of {user_tilt:.0f}° is compared against the annual optimal tilt of {annual_optimal_tilt}° for the same azimuth ({user_azimuth:.0f}°).",
-        f"Potential uplift compared to your current setup is approximately {potential_pct:+.1f}% (clearsky model, {int(system_losses*100)}% system losses assumed).",
-        "Seasonal tilt adjustment can further improve generation (see monthly optimal tilt values).",
-        "Regularly clean panels and avoid shading to maintain maximum efficiency.",
+        f"Your tilt angle is {user_tilt:.0f}° and the annual optimal tilt for this location is {annual_optimal_tilt}° (azimuth {user_azimuth:.0f}°).",
+        f"Estimated potential change vs your current tilt: {potential_pct:+.1f}% (clearsky model, {int(system_losses*100)}% system losses).",
+        "If your mounting system allows it, seasonal tilt adjustment can improve generation (see monthly optimal tilt).",
+        "Keep panels clean and minimize shading to maintain efficiency.",
     ]
 
-    # Monthly table for PDF (unique column keys internally)
-    monthly_table_df = pd.DataFrame({
-        "Month": MONTH_NAMES,
-        "Your Generation kWh": [float(monthly_user.get(m, 0.0)) for m in range(1, 13)],
-        "Optimal Tilt, yearly": [annual_optimal_tilt] * 12,
-        "Optimal Generation kWh (yearly)": [float(monthly_opt_yearly.get(m, 0.0)) for m in range(1, 13)],
-        "Optimal Tilt, monthly": [int(best_tilts.loc[m]) for m in range(1, 13)],
-        "Optimal Generation kWh (monthly)": [float(monthly_opt_monthly.loc[m]) for m in range(1, 13)],
-    })
+    # Monthly Data table for PDF
+    monthly_data_df = pd.DataFrame(
+        {
+            "Month": monthly_user.index.strftime("%b"),
+            "Your Generation (kWh)": monthly_user.values.astype(float),
+            "Optimal Tilt, yearly (°)": [annual_optimal_tilt] * len(monthly_user),
+            "Optimal Gen, yearly (kWh)": monthly_opt_yearly.values.astype(float),
+            "Optimal Tilt, monthly (°)": monthly_best["BestTiltDeg"].values.astype(int),
+            "Optimal Gen, monthly (kWh)": monthly_opt_monthly.values.astype(float),
+        }
+    )
 
-    # Chart for PDF
+    # Chart image for PDF (user vs annual optimal)
     fig, ax = plt.subplots(figsize=(7.2, 3.6), dpi=160)
-    ax.plot(MONTH_ABBR, monthly_table_df["Your Generation kWh"].values, label="Your tilt", color="#f59e0b", linewidth=2.6)
-    ax.plot(MONTH_ABBR, monthly_table_df["Optimal Generation kWh (yearly)"].values, label="Optimal tilt", color="#22c55e", linewidth=2.6)
+    ax.plot(month_short, monthly_user.values, label="Your tilt", color="#f59e0b", linewidth=2.6)
+    ax.plot(month_short, monthly_opt_yearly.values, label="Optimal tilt", color="#22c55e", linewidth=2.6)
     ax.set_title("Monthly Generation Chart")
     ax.set_ylabel("kWh")
     ax.grid(True, alpha=0.25)
@@ -160,7 +183,49 @@ def calculate_solar_output(
     img_buf.seek(0)
     plt.close(fig)
 
-    # PDF
+    # Build PDF
+    pdf_bytes = _build_pdf_report(
+        img_buf=img_buf,
+        latitude=latitude,
+        longitude=longitude,
+        system_power_kw=system_power_kw,
+        user_tilt=user_tilt,
+        user_azimuth=user_azimuth,
+        annual_optimal_tilt=annual_optimal_tilt,
+        annual_energy_user=annual_energy_user,
+        annual_energy_optimal=annual_energy_optimal,
+        monthly_data_df=monthly_data_df,
+        recommendations=recs,
+    )
+
+    return {
+        "monthly_best": monthly_best,
+        "annual_optimal_tilt": annual_optimal_tilt,
+        "annual_energy_user": annual_energy_user,
+        "annual_energy_optimal": annual_energy_optimal,
+        "monthly_user": monthly_user,
+        "monthly_opt_yearly": monthly_opt_yearly,
+        "monthly_opt_monthly": monthly_opt_monthly,
+        "monthly_data_df": monthly_data_df,
+        "potential_pct": potential_pct,
+        "recommendations": recs,
+        "pdf_bytes": pdf_bytes,
+    }
+
+
+def _build_pdf_report(
+    img_buf: BytesIO,
+    latitude: float,
+    longitude: float,
+    system_power_kw: float,
+    user_tilt: float,
+    user_azimuth: float,
+    annual_optimal_tilt: int,
+    annual_energy_user: float,
+    annual_energy_optimal: float,
+    monthly_data_df: pd.DataFrame,
+    recommendations: List[str],
+) -> bytes:
     pdf_buf = BytesIO()
     doc = SimpleDocTemplate(
         pdf_buf,
@@ -172,32 +237,31 @@ def calculate_solar_output(
     )
 
     styles = getSampleStyleSheet()
-    h1 = ParagraphStyle("H1", parent=styles["Heading1"], fontSize=18, spaceAfter=8)
+    h1 = ParagraphStyle("H1", parent=styles["Heading1"], fontSize=18, spaceAfter=6)
     h2 = ParagraphStyle("H2", parent=styles["Heading2"], fontSize=13, spaceBefore=10, spaceAfter=6)
     sub = ParagraphStyle("Sub", parent=styles["Normal"], fontSize=10, textColor=colors.grey)
-    small = ParagraphStyle("Small", parent=styles["Normal"], fontSize=9)
-
-    # As requested in spec
-    report_date = pd.Timestamp("2025-12-22").strftime("%m/%d/%Y")
+    normal = ParagraphStyle("N", parent=styles["Normal"], fontSize=10, leading=13)
 
     story = []
     story.append(Paragraph("Solar Ninja - Generation Report", h1))
-    story.append(Paragraph(f"Date: {report_date}", sub))
+    story.append(Paragraph(f"Date: {pd.Timestamp.now().strftime('%m/%d/%Y')}", sub))
     story.append(Spacer(1, 12))
 
+    # System Parameters
     story.append(Paragraph("System Parameters", h2))
+    params_rows = [
+        ["Location (lat, lon)", f"{latitude:.4f}, {longitude:.4f}"],
+        ["System Power", f"{system_power_kw:.2f} kW"],
+        ["Your Tilt Angle", f"{user_tilt:.1f}°"],
+        ["Azimuth", f"{user_azimuth:.0f}°"],
+        ["Optimal Annual Tilt", f"{annual_optimal_tilt}°"],
+        ["Annual Generation (your tilt)", f"{_format_kwh(annual_energy_user)} kWh"],
+        ["Annual Generation (optimal)", f"{_format_kwh(annual_energy_optimal)} kWh"],
+    ]
+
     params_table = Table(
-        [
-            ["Parameter", "Value"],
-            ["Location (lat, lon)", f"{latitude:.4f}, {longitude:.4f}"],
-            ["System Power", f"{system_power_kw:.2f} kW"],
-            ["Your Tilt Angle", f"{user_tilt:.1f}°"],
-            ["Azimuth", f"{user_azimuth:.0f}°"],
-            ["Optimal Annual Tilt", f"{annual_optimal_tilt}°"],
-            ["Annual Generation (your tilt)", f"{annual_energy_user:,.0f} kWh"],
-            ["Annual Generation (optimal)", f"{annual_energy_optimal:,.0f} kWh"],
-        ],
-        colWidths=[210, 270],
+        [["Parameter", "Value"]] + params_rows,
+        colWidths=[220, 260],
     )
     params_table.setStyle(
         TableStyle(
@@ -205,82 +269,78 @@ def calculate_solar_output(
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f172a")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("GRID", (0, 0), (-1, -1), 0.4, colors.lightgrey),
+                ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
                 ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.white]),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("PADDING", (0, 0), (-1, -1), 6),
+                ("ALIGN", (1, 1), (1, -1), "LEFT"),
             ]
         )
     )
     story.append(params_table)
     story.append(Spacer(1, 12))
 
+    # Chart
     story.append(Paragraph("Monthly Generation Chart", h2))
     story.append(PDFImage(img_buf, width=500, height=250))
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 12))
 
-    # Monthly Data table (as requested)
+    # Monthly Data table
     story.append(Paragraph("Monthly Data", h2))
 
     header = [
-        Paragraph("Month", small),
-        Paragraph("Your Generation kWh", small),
-        Paragraph("Optimal Tilt, yearly", small),
-        Paragraph("Optimal Generation kWh", small),
-        Paragraph("Optimal Tilt, monthly", small),
-        Paragraph("Optimal Generation kWh", small),
+        "Month",
+        "Your Generation (kWh)",
+        "Optimal Tilt, yearly (°)",
+        "Optimal Gen, yearly (kWh)",
+        "Optimal Tilt, monthly (°)",
+        "Optimal Gen, monthly (kWh)",
     ]
 
     rows = []
-    for _, r in monthly_table_df.iterrows():
-        rows.append([
-            r["Month"],
-            f"{r['Your Generation kWh']:.0f}",
-            f"{int(r['Optimal Tilt, yearly'])}",
-            f"{r['Optimal Generation kWh (yearly)']:.0f}",
-            f"{int(r['Optimal Tilt, monthly'])}",
-            f"{r['Optimal Generation kWh (monthly)']:.0f}",
-        ])
+    for _, r in monthly_data_df.iterrows():
+        rows.append(
+            [
+                str(r["Month"]),
+                _format_kwh(r["Your Generation (kWh)"]),
+                str(int(r["Optimal Tilt, yearly (°)"])),
+                _format_kwh(r["Optimal Gen, yearly (kWh)"]),
+                str(int(r["Optimal Tilt, monthly (°)"])),
+                _format_kwh(r["Optimal Gen, monthly (kWh)"]),
+            ]
+        )
 
-    monthly_table = Table([header] + rows, colWidths=[88, 86, 78, 92, 78, 92])
-    monthly_table.setStyle(
+    # A4 usable width ~ 507pt; keep table compact
+    col_widths = [44, 92, 78, 104, 78, 104]  # total 500
+    data_table = Table([header] + rows, colWidths=col_widths, repeatRows=1)
+
+    data_table.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#0f172a")),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f59e0b")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#0b1220")),
                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("FONTSIZE", (0, 0), (-1, -1), 8.8),
                 ("GRID", (0, 0), (-1, -1), 0.35, colors.lightgrey),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#fbfdff")]),
-                ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.white]),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("PADDING", (0, 0), (-1, -1), 5),
+                ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+                ("ALIGN", (0, 0), (0, -1), "LEFT"),
             ]
         )
     )
-    story.append(monthly_table)
-    story.append(Spacer(1, 10))
 
+    story.append(data_table)
+    story.append(Spacer(1, 12))
+
+    # Recommendations
     story.append(Paragraph("Recommendations", h2))
-    for r in recs:
-        story.append(Paragraph(f"• {r}", styles["Normal"]))
+    for r in recommendations:
+        story.append(Paragraph(f"• {r}", normal))
 
     doc.build(story)
     pdf_buf.seek(0)
-
-    return {
-        "monthly_best": monthly_best,
-        "annual_optimal_tilt": annual_optimal_tilt,
-        "annual_energy_user": annual_energy_user,
-        "annual_energy_optimal": annual_energy_optimal,
-        "monthly_user": monthly_user,
-        "monthly_opt_yearly": monthly_opt_yearly,
-        "monthly_opt_monthly": monthly_opt_monthly,
-        "potential_pct": potential_pct,
-        "recommendations": recs,
-        "monthly_table_df": monthly_table_df,
-        "pdf_bytes": pdf_buf.getvalue(),
-    }
+    return pdf_buf.getvalue()
 
 
 # ✅ This is what app.py imports
@@ -299,11 +359,15 @@ def run_for_ui(
         user_azimuth=user_azimuth,
     )
 
-    monthly_chart_df = pd.DataFrame({
-        "month": MONTH_ABBR,
-        "kwh_user": [float(res["monthly_user"].get(m, 0.0)) for m in range(1, 13)],
-        "kwh_optimal_yearly": [float(res["monthly_opt_yearly"].get(m, 0.0)) for m in range(1, 13)],
-    })
+    monthly_chart_df = pd.DataFrame(
+        {
+            "month": res["monthly_user"].index.strftime("%b"),
+            "kwh_user": res["monthly_user"].values.astype(float),
+            "kwh_optimal_yearly": res["monthly_opt_yearly"].values.astype(float),
+        }
+    )
+
+    tilt_by_month_df = res["monthly_best"][["Month", "BestTiltDeg"]].copy()
 
     return UIOutput(
         optimal_angle=int(res["annual_optimal_tilt"]),
@@ -311,7 +375,7 @@ def run_for_ui(
         annual_kwh_optimal=float(res["annual_energy_optimal"]),
         potential_pct=float(res["potential_pct"]),
         monthly_chart_df=monthly_chart_df,
-        tilt_by_month_df=res["monthly_best"][["Month", "BestTiltDeg"]].copy(),
+        tilt_by_month_df=tilt_by_month_df,
         recommendations=list(res["recommendations"]),
         pdf_bytes=res["pdf_bytes"],
     )
