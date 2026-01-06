@@ -1,205 +1,314 @@
 import streamlit as st
-from utils.base_model import calculate_solar_output
+import plotly.graph_objects as go
+from contextlib import contextmanager
 
-# ---------------------------------------------------------
-# 1. Page Configuration
-# ---------------------------------------------------------
-st.set_page_config(
-    page_title="Solar Ninja",
-    page_icon="⚔️",
-    layout="wide",
-    initial_sidebar_state="collapsed"
+from utils.base_model import run_for_ui
+
+
+@contextmanager
+def white_card():
+    try:
+        with st.container(border=True):
+            yield
+    except TypeError:
+        with st.container():
+            yield
+
+
+def spacer(px: int = 18):
+    st.markdown(f"<div style='height:{px}px'></div>", unsafe_allow_html=True)
+
+
+st.set_page_config(page_title="Solar Ninja", page_icon="☀️", layout="wide")
+
+st.markdown(
+    """
+<style>
+/* ---------- Page ---------- */
+.stApp{ background:#f6f7fb; }
+.block-container{ max-width:1240px; margin:0 auto; padding-top:1.05rem; padding-bottom:2.2rem; }
+header{ visibility:hidden; height:0px; }
+section.main > div{ padding-top:0.10rem; }
+
+/* ---------- Brand ---------- */
+.brand{ margin-top:6px; }
+.brand b{ font-size:1.38rem; font-weight:950; color:#0f172a; }
+.brand small{ display:block; margin-top:2px; font-size:1.03rem; color:rgba(2,6,23,.62); }
+
+/* ---------- Hero ---------- */
+.hero-wrap{ text-align:center; margin:10px 0 26px; }
+.hero-kicker{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:9px 16px; border-radius:999px;
+  background:rgba(245,158,11,0.14);
+  color:#b45309; font-weight:900; font-size:1.08rem;
+}
+.hero-title{
+  font-size:4.15rem; font-weight:950; color:#0f172a;
+  margin:12px 0 8px; letter-spacing:-0.02em;
+}
+.hero-title span{ color:#f59e0b; }
+.hero-sub{
+  color:rgba(2,6,23,.65);
+  font-size:1.10rem;
+  margin:0 auto; max-width:900px;
+  line-height:1.45;
+}
+
+/* ---------- White cards for containers(border=True) ---------- */
+/* Streamlit can render slightly different structures per version.
+   We paint wrapper + inner blocks to guarantee WHITE content. */
+:root{
+  --card-radius: 20px;
+  --card-shadow: 0 10px 28px rgba(15,23,42,.08);
+}
+
+/* Wrapper */
+div[data-testid="stVerticalBlockBorderWrapper"]{
+  background:#fff !important;
+  border:0 !important;
+  border-radius:var(--card-radius) !important;
+  box-shadow:var(--card-shadow) !important;
+  padding:18px 18px 16px 18px !important;
+}
+
+/* First inner block */
+div[data-testid="stVerticalBlockBorderWrapper"] > div{
+  background:#fff !important;
+  border-radius:var(--card-radius) !important;
+}
+
+/* Deeper inner blocks (this fixes "grey inside" on some themes/versions) */
+div[data-testid="stVerticalBlockBorderWrapper"] *{
+  background-color: transparent;
+}
+div[data-testid="stVerticalBlockBorderWrapper"] .stMarkdown,
+div[data-testid="stVerticalBlockBorderWrapper"] .stText,
+div[data-testid="stVerticalBlockBorderWrapper"] .stDataFrame,
+div[data-testid="stVerticalBlockBorderWrapper"] .element-container,
+div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlock"]{
+  background: transparent !important;
+}
+
+/* Section titles */
+.section-title{
+  font-size:1.02rem; font-weight:950; color:#0f172a; margin:0 0 12px 0;
+}
+
+/* ---------- KPI cards ---------- */
+.kpi{
+  background:#fff;
+  border:0;
+  border-radius:var(--card-radius);
+  box-shadow:var(--card-shadow);
+  padding:14px 16px;
+  min-height:118px;
+  display:flex; flex-direction:column; justify-content:center;
+}
+.kpi .t{ font-size:.92rem; color:rgba(2,6,23,.62); margin-bottom:10px; font-weight:850; }
+.kpi .v{ font-size:1.88rem; font-weight:950; color:#0f172a; line-height:1.05; }
+
+/* ---------- Month tiles ---------- */
+.tile{
+  background:#f1f5f9;
+  border:1px solid rgba(15,23,42,.08);
+  border-radius:16px;
+  padding:14px 10px;
+  text-align:center;
+}
+.tile .m{ font-size:.84rem; color:rgba(2,6,23,.62); font-weight:700; }
+.tile .v{ font-size:1.18rem; font-weight:950; color:#0f172a; margin-top:4px; }
+
+/* ---------- Buttons ---------- */
+.stFormSubmitButton button, .stButton button, .stDownloadButton button{
+  background:#f59e0b !important;
+  color:#0b1220 !important;
+  border:0 !important;
+  border-radius:14px !important;
+  font-weight:950 !important;
+  padding:0.62rem 0.95rem !important;
+  box-shadow:0 10px 24px rgba(245,158,11,.18) !important;
+}
+.stFormSubmitButton button:hover, .stButton button:hover, .stDownloadButton button:hover{
+  filter:brightness(0.96);
+}
+
+/* ---------- Sliders: orange filled + green unfilled ---------- */
+div[data-baseweb="slider"] [role="presentation"]{ background-color:#22c55e !important; }
+div[data-baseweb="slider"] [role="presentation"] > div{ background-color:#f59e0b !important; }
+div[data-baseweb="slider"] div[role="slider"]{
+  background-color:#f59e0b !important;
+  border-color:#f59e0b !important;
+}
+div[data-baseweb="slider"] span{ color:#f59e0b !important; font-weight:900 !important; }
+
+/* A little more rounding everywhere in inputs */
+div[data-testid="stNumberInput"] input,
+div[data-testid="stTextInput"] input{
+  border-radius:14px !important;
+}
+</style>
+""",
+    unsafe_allow_html=True,
 )
 
-# ---------------------------------------------------------
-# 2. Custom CSS (Website Look - Grey BG, White Blocks)
-# ---------------------------------------------------------
-st.markdown("""
-<style>
-    /* 1. Global Background */
-    .stApp {
-        background-color: #F2F4F8; /* Light Grey Background */
-    }
+st.markdown(
+    "<div class='brand'><b>☀️ Solar Ninja</b><small>Solar Energy Optimization</small></div>",
+    unsafe_allow_html=True
+)
 
-    /* 2. White Blocks (Containers) - We will style standard Streamlit containers implicitly via wrapping or simple grouping */
-    /* Оскільки ми не можемо напряму стилізувати st.container, ми використовуємо css injection для головних блоків */
-    
-    div.block-container {
-        padding-top: 2rem;
-    }
+st.markdown(
+    """
+<div class="hero-wrap">
+  <div class="hero-kicker">☀️ Optimize your solar system</div>
+  <div class="hero-title">Maximize <span>generation</span></div>
+  <div class="hero-sub">Calculate the optimal panel tilt angle and get the accurate forecast of annual generation for your location.</div>
+</div>
+""",
+    unsafe_allow_html=True
+)
 
-    /* 3. Headers */
-    h1, h2, h3 {
-        color: #333333;
-        font-family: 'Helvetica Neue', sans-serif;
-    }
-    
-    /* 4. Buttons (Calculate & Download) */
-    .stButton > button {
-        background-color: #FF8C00 !important; /* Orange */
-        color: white !important;
-        border: none;
-        border-radius: 8px;
-        font-weight: bold;
-        padding: 0.5rem 1rem;
-        transition: all 0.3s;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .stButton > button:hover {
-        background-color: #e07b00 !important;
-        box-shadow: 0 6px 8px rgba(0,0,0,0.15);
-    }
+left, right = st.columns([0.38, 0.62])
 
-    /* 5. Metrics styling */
-    div[data-testid="stMetric"] {
-        background-color: #FFFFFF;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        border: 1px solid #E0E0E0;
-    }
-    div[data-testid="stMetricLabel"] {
-        color: #666666;
-    }
-    div[data-testid="stMetricValue"] {
-        color: #333333;
-        font-weight: 700;
-    }
-    
-    /* 6. Custom styling for Sliders to approximate "Orange" and "Green" */
-    /* Це складний хак для Streamlit, оскільки він не має класів для окремих слайдерів.
-       Ми змінимо загальний акцент на Помаранчевий. */
-    div[data-baseweb="slider"] div[data-testid="stTickBar"] {
-        background: #FF8C00; 
-    }
-    
-    /* Стиль для білих карток (використовується через markdown div) */
-    .white-card {
-        background-color: white;
-        padding: 25px;
-        border-radius: 15px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        margin-bottom: 20px;
-    }
+with left:
+    with white_card():
+        st.markdown("<div class='section-title'>System Parameters</div>", unsafe_allow_html=True)
 
-</style>
-""", unsafe_allow_html=True)
+        with st.form("calc_form", border=False):
+            st.markdown("**📍 Location**")
+            latitude = st.number_input("Latitude (°)", value=50.45, format="%.4f")
+            longitude = st.number_input("Longitude (°)", value=30.52, format="%.4f")
 
-# ---------------------------------------------------------
-# 3. Header
-# ---------------------------------------------------------
-st.title("⚔️ Solar Ninja")
-st.markdown("##### Professional Solar Energy Estimator")
-st.write("") # Spacer
+            st.divider()
+            st.markdown("**⚡ System power**")
+            system_power_kw = st.number_input("System power (kW)", value=10.0, step=0.5)
 
-# ---------------------------------------------------------
-# 4. Inputs Section (White Block)
-# ---------------------------------------------------------
-# Ми використовуємо контейнер і імітуємо білий блок, розміщуючи його вміст "всередині" візуально
-with st.container():
-    st.markdown('<div class="white-card">', unsafe_allow_html=True)
-    st.markdown("### 🛠️ Configuration")
-    
-    with st.form("main_form"):
-        # Рядок 1: Координати (Київ)
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("**Location Coordinates**")
-            col_lat, col_lon = st.columns(2)
-            # Defaults: Kyiv (50.45, 30.52)
-            latitude = col_lat.number_input("Latitude", value=50.4500, format="%.4f")
-            longitude = col_lon.number_input("Longitude", value=30.5200, format="%.4f")
-        
-        with c2:
-            st.markdown("**System Parameters**")
-            # Orange Slider idea (System Power)
-            system_power_kw = st.slider("System Power (kW)", 1.0, 50.0, 10.0, step=0.5)
-            # "Green" slider idea (Tilt) - we keep it standard style but in same block
-            user_tilt = st.slider("Panel Tilt (degrees)", 0, 90, 45)
+            st.divider()
+            st.markdown("**📐 Panel tilt**")
+            user_tilt = st.slider("Tilt angle (°)", 0, 90, 45)
 
-        st.write("")
-        # Кнопка на всю ширину або по центру
-        btn_col1, btn_col2, btn_col3 = st.columns([1, 2, 1])
-        with btn_col2:
-            submitted = st.form_submit_button("CALCULATE ESTIMATE 🚀", use_container_width=True)
-            
-    st.markdown('</div>', unsafe_allow_html=True)
+            st.divider()
+            st.markdown("**🧭 Orientation (azimuth)**")
+            user_azimuth = st.slider("Azimuth (°)", 0, 360, 180)
 
-# ---------------------------------------------------------
-# 5. Logic & Outputs
-# ---------------------------------------------------------
+            submitted = st.form_submit_button("⚡ Calculate", use_container_width=True)
 
-if submitted:
-    # Розрахунок
-    with st.spinner("Calculating Solar Potential..."):
-        result = calculate_solar_output(
-            latitude=latitude,
-            longitude=longitude,
-            system_power_kw=system_power_kw,
-            user_tilt=user_tilt
+with right:
+    if submitted or "ui_result" not in st.session_state:
+        with st.spinner("Running Solar Ninja calculations…"):
+            st.session_state.ui_result = run_for_ui(
+                latitude=latitude,
+                longitude=longitude,
+                system_power_kw=system_power_kw,
+                user_tilt=user_tilt,
+                user_azimuth=user_azimuth,
+            )
+
+    out = st.session_state.ui_result
+
+    # Download (no card)
+    a, b = st.columns([0.70, 0.30])
+    with a:
+        st.empty()
+    with b:
+        if out.pdf_bytes:
+            st.download_button(
+                "⬇️ Download PDF",
+                data=out.pdf_bytes,
+                file_name="solar_ninja_generation_report.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        else:
+            st.button("⬇️ Download PDF", disabled=True, use_container_width=True)
+
+    spacer(18)
+
+    # KPI row
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        st.markdown(
+            f"<div class='kpi'><div class='t'>Optimal angle</div><div class='v'>{out.optimal_angle}°</div></div>",
+            unsafe_allow_html=True,
         )
-        
-    monthly_df = result["monthly_df"]
-    monthly_best = result["monthly_best"]
-    annual_energy = result["annual_energy"]
-    annual_optimal_tilt = result["annual_optimal_tilt"]
-    pdf_buffer = result["pdf"]
-    fig = result["fig"]
-
-    # -----------------------------------------------------
-    # RESULT BLOCK (White Card)
-    # -----------------------------------------------------
-    st.markdown('<div class="white-card">', unsafe_allow_html=True)
-    st.markdown("### 📊 Results Analysis")
-    
-    # 1. Metrics Row
-    m1, m2, m3 = st.columns(3)
-    with m1:
-        st.metric("Total Annual Energy", f"{annual_energy:,.0f} kWh")
-    with m2:
-        st.metric("Optimal Tilt Angle", f"{annual_optimal_tilt}°")
-    with m3:
-        # Різниця
-        diff = annual_optimal_tilt - user_tilt
-        st.metric("Tilt Difference", f"{diff:+.1f}°", delta="Deviation from optimal", delta_color="inverse")
-    
-    st.divider()
-
-    # 2. Chart & Table
-    row_chart, row_table = st.columns([2, 1])
-    
-    with row_chart:
-        st.markdown("**Monthly Energy Production**")
-        st.pyplot(fig, use_container_width=True)
-        
-    with row_table:
-        st.markdown("**Monthly Data Table**")
-        st.dataframe(
-            monthly_df, 
-            hide_index=True, 
-            use_container_width=True, 
-            height=300
+    with k2:
+        st.markdown(
+            f"<div class='kpi'><div class='t'>Your generation</div><div class='v'>{out.annual_kwh_user:,.0f}</div></div>",
+            unsafe_allow_html=True,
+        )
+    with k3:
+        st.markdown(
+            f"<div class='kpi'><div class='t'>Optimal generation</div><div class='v'>{out.annual_kwh_optimal:,.0f}</div></div>",
+            unsafe_allow_html=True,
+        )
+    with k4:
+        st.markdown(
+            f"<div class='kpi'><div class='t'>Potential</div><div class='v'>{out.potential_pct:+.1f}%</div></div>",
+            unsafe_allow_html=True,
         )
 
-    st.divider()
-    
-    # 3. Actions (Download)
-    d1, d2 = st.columns([3, 1])
-    with d1:
-        with st.expander("View Detailed Optimization Data"):
-            st.dataframe(monthly_best, use_container_width=True)
-    with d2:
-        st.download_button(
-            label="📥 Download Report (PDF)",
-            data=pdf_buffer,
-            file_name="Solar_Ninja_Kyiv_Report.pdf",
-            mime="application/pdf",
-            type="primary",
-            use_container_width=True
+    spacer(22)
+
+    # Monthly chart card
+    with white_card():
+        st.markdown("<div class='section-title'>Monthly generation (kWh)</div>", unsafe_allow_html=True)
+        df = out.monthly_chart_df
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df["month"], y=df["kwh_user"],
+            name="Your tilt", mode="lines",
+            line=dict(color="#f59e0b", width=3)
+        ))
+        fig.add_trace(go.Scatter(
+            x=df["month"], y=df["kwh_optimal_yearly"],
+            name="Optimal tilt", mode="lines",
+            line=dict(color="#22c55e", width=3)
+        ))
+        fig.update_layout(
+            height=370,
+            margin=dict(l=10, r=10, t=10, b=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            xaxis=dict(showgrid=False),
+            yaxis=dict(gridcolor="rgba(15,23,42,0.08)"),
         )
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)
+    spacer(22)
 
-else:
-    # Start screen hint
-    st.info("👆 Click **CALCULATE ESTIMATE** to run the model for the default location (Kyiv).")
+    # Optimal tilt by month — make this container "bigger"
+    with white_card():
+        st.markdown("<div class='section-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
+
+        m_df = out.tilt_by_month_df
+        months = m_df["Month"].tolist()
+        tilts = m_df["BestTiltDeg"].astype(int).tolist()
+
+        # Add some inner breathing room (makes card feel taller)
+        spacer(6)
+
+        row1 = st.columns(6)
+        row2 = st.columns(6)
+
+        for i in range(min(6, len(months))):
+            with row1[i]:
+                st.markdown(
+                    f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
+                    unsafe_allow_html=True,
+                )
+        spacer(8)
+        for i in range(6, min(12, len(months))):
+            with row2[i - 6]:
+                st.markdown(
+                    f"<div class='tile'><div class='m'>{months[i]}</div><div class='v'>{tilts[i]}°</div></div>",
+                    unsafe_allow_html=True,
+                )
+
+        spacer(6)
+
+    spacer(22)
+
+    with white_card():
+        st.markdown("<div class='section-title'>Recommendations</div>", unsafe_allow_html=True)
+        for r in out.recommendations:
+            st.markdown(f"- {r}")
