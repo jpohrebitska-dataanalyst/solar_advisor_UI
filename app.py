@@ -84,7 +84,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div{
   border-radius:var(--card-radius) !important;
 }
 
-/* Deeper inner blocks */
+/* Deeper inner blocks (fix "grey inside" on some themes/versions) */
 div[data-testid="stVerticalBlockBorderWrapper"] *{
   background-color: transparent;
 }
@@ -174,10 +174,11 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- Location state (map -> lat/lon) ---
+# --- Defaults ---
 DEFAULT_LAT = 50.45
 DEFAULT_LON = 30.52
 
+# --- Ensure session state exists ---
 if "latitude" not in st.session_state:
     st.session_state.latitude = float(DEFAULT_LAT)
 if "longitude" not in st.session_state:
@@ -189,70 +190,126 @@ with left:
     with white_card():
         st.markdown("<div class='section-title'>System Parameters</div>", unsafe_allow_html=True)
 
-        # --- Location (MAP) ---
+        # --------------------------
+        # Location (MAP) + lat/lon
+        # --------------------------
         st.markdown("**📍 Location**")
 
         if folium is not None and st_folium is not None:
-            # build folium map
             m = folium.Map(
                 location=[st.session_state.latitude, st.session_state.longitude],
-                zoom_start=9,
+                zoom_start=10,
                 control_scale=False,
                 tiles="CartoDB positron",
             )
-            folium.Marker(
-                [st.session_state.latitude, st.session_state.longitude],
-            ).add_to(m)
+            folium.Marker([st.session_state.latitude, st.session_state.longitude]).add_to(m)
 
-            map_data = st_folium(m, height=260, key="location_map")
+            map_data = st_folium(
+                m,
+                height=260,
+                key="location_map",
+                returned_objects=["last_clicked"],
+            )
 
-            # update state on click (no text output)
             if map_data and isinstance(map_data, dict):
                 last_clicked = map_data.get("last_clicked")
                 if last_clicked and isinstance(last_clicked, dict):
                     lat = last_clicked.get("lat")
                     lng = last_clicked.get("lng")
                     if lat is not None and lng is not None:
-                        st.session_state.latitude = float(lat)
-                        st.session_state.longitude = float(lng)
+                        new_lat = float(lat)
+                        new_lon = float(lng)
 
-            latitude = float(st.session_state.latitude)
-            longitude = float(st.session_state.longitude)
+                        if (
+                            abs(new_lat - float(st.session_state.latitude)) > 1e-9
+                            or abs(new_lon - float(st.session_state.longitude)) > 1e-9
+                        ):
+                            st.session_state.latitude = new_lat
+                            st.session_state.longitude = new_lon
+                            try:
+                                st.rerun()
+                            except Exception:
+                                st.experimental_rerun()
 
-        else:
-            # Fallback (if deps not installed) — keeps app running
-            latitude = st.number_input("Latitude (°)", value=float(st.session_state.latitude), format="%.4f")
-            longitude = st.number_input("Longitude (°)", value=float(st.session_state.longitude), format="%.4f")
-            st.session_state.latitude = float(latitude)
-            st.session_state.longitude = float(longitude)
+        # lat/lon inputs (synced with map via session_state)
+        latitude = st.number_input("Latitude (°)", value=float(st.session_state.latitude), format="%.4f", key="latitude")
+        longitude = st.number_input("Longitude (°)", value=float(st.session_state.longitude), format="%.4f", key="longitude")
 
-        # --- Form: other params + Calculate button (same flow as before) ---
-        with st.form("calc_form", border=False):
-            st.divider()
-            st.markdown("**⚡ System power**")
-            system_power_kw = st.number_input("System power (kW)", value=10.0, step=0.5)
+        st.divider()
 
-            st.divider()
-            st.markdown("**📐 Panel tilt**")
-            user_tilt = st.slider("Tilt angle (°)", 0, 90, 45)
+        # --------------------------
+        # System power
+        # --------------------------
+        st.markdown("**⚡ System power**")
+        system_power_kw = st.number_input("System power (kW)", value=10.0, step=0.5, key="system_power_kw")
 
-            st.divider()
-            st.markdown("**🧭 Orientation (azimuth)**")
+        st.divider()
 
-            auto_azimuth = st.checkbox("Auto azimuth (by hemisphere)", value=True)
-            az_slider = st.slider("Azimuth (°)", 0, 360, 180, disabled=auto_azimuth)
-            user_azimuth = None if auto_azimuth else az_slider
+        # --------------------------
+        # Panel tilt
+        # --------------------------
+        st.markdown("**📐 Panel tilt**")
+        user_tilt = st.slider("Tilt angle (°)", 0, 90, 45, key="user_tilt")
 
-            submitted = st.form_submit_button("⚡ Calculate", use_container_width=True)
+        st.divider()
+
+        # --------------------------
+        # Azimuth (instant toggle + auto sets 180/0)
+        # --------------------------
+        st.markdown("**🧭 Orientation (azimuth)**")
+
+        ideal_azimuth = 180 if float(latitude) >= 0 else 0
+
+        if "auto_azimuth" not in st.session_state:
+            st.session_state.auto_azimuth = True
+        if "azimuth_value" not in st.session_state:
+            st.session_state.azimuth_value = int(ideal_azimuth)
+        if "last_manual_azimuth" not in st.session_state:
+            st.session_state.last_manual_azimuth = 180
+
+        # keep slider synced when auto is ON (and latitude changed)
+        if st.session_state.auto_azimuth and int(st.session_state.azimuth_value) != int(ideal_azimuth):
+            st.session_state.azimuth_value = int(ideal_azimuth)
+
+        def _on_auto_toggle():
+            ideal = 180 if float(st.session_state.latitude) >= 0 else 0
+
+            if st.session_state.auto_azimuth:
+                # switching ON auto: remember manual, set to ideal
+                st.session_state.last_manual_azimuth = int(st.session_state.azimuth_value)
+                st.session_state.azimuth_value = int(ideal)
+            else:
+                # switching OFF auto: restore last manual (or ideal if none)
+                st.session_state.azimuth_value = int(st.session_state.get("last_manual_azimuth", ideal))
+
+        auto_azimuth = st.checkbox(
+            "Auto azimuth (by hemisphere)",
+            value=st.session_state.auto_azimuth,
+            key="auto_azimuth",
+            on_change=_on_auto_toggle,
+        )
+
+        az_slider = st.slider(
+            "Azimuth (°)",
+            0, 360,
+            value=int(st.session_state.azimuth_value),
+            key="azimuth_value",
+            disabled=auto_azimuth,
+        )
+
+        user_azimuth = None if auto_azimuth else float(az_slider)
+
+        # Calculate button (reactive; same visual styling)
+        submitted = st.button("⚡ Calculate", use_container_width=True)
 
 with right:
     if submitted or "ui_result" not in st.session_state:
         with st.spinner("Running Solar Ninja calculations…"):
             st.session_state.ui_result = run_for_ui(
-                latitude=latitude,
-                longitude=longitude,
-                system_power_kw=system_power_kw,
-                user_tilt=user_tilt,
+                latitude=float(latitude),
+                longitude=float(longitude),
+                system_power_kw=float(system_power_kw),
+                user_tilt=float(user_tilt),
                 user_azimuth=user_azimuth,
             )
 
@@ -328,7 +385,7 @@ with right:
 
     spacer(22)
 
-    # Optimal tilt by month — make this container "bigger"
+    # Optimal tilt by month
     with white_card():
         st.markdown("<div class='section-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
 
