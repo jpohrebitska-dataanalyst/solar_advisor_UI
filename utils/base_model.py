@@ -6,17 +6,21 @@ from pvlib.location import Location
 from pvlib import irradiance
 import matplotlib.pyplot as plt
 from io import BytesIO
-import tempfile
-import os
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
 
 # --- PDF imports (as in your verified version) ---
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.lib.units import inch
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as PDFImage
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+    Image as PDFImage,
+)
 
 
 @dataclass
@@ -31,13 +35,86 @@ class UIOutput:
     pdf_bytes: Optional[bytes]
 
 
-def calculate_solar_output(latitude, longitude, system_power_kw, user_tilt):
+def _parse_optional_float(x: Any) -> Optional[float]:
+    """
+    Robust parsing:
+    - None, "", " ", NaN -> None
+    - numeric / numeric strings -> float
+    """
+    if x is None:
+        return None
+
+    if isinstance(x, str):
+        s = x.strip()
+        if s == "":
+            return None
+        try:
+            return float(s)
+        except ValueError:
+            return None
+
+    # numpy float / python float / int
+    try:
+        val = float(x)
+    except (TypeError, ValueError):
+        return None
+
+    if np.isnan(val):
+        return None
+
+    return val
+
+
+def _resolve_azimuths(latitude: float, user_azimuth: Any) -> Dict[str, Any]:
+    """
+    Returns:
+      - ideal_azimuth: 180° for Northern hemisphere (lat>=0), 0° for Southern (lat<0)
+      - user_azimuth_effective: user azimuth if provided, else ideal_azimuth
+      - user_azimuth_provided: bool
+    """
+    ideal_azimuth = 180.0 if float(latitude) >= 0.0 else 0.0
+
+    user_az = _parse_optional_float(user_azimuth)
+    if user_az is None:
+        return {
+            "ideal_azimuth": ideal_azimuth,
+            "user_azimuth_effective": ideal_azimuth,
+            "user_azimuth_provided": False,
+        }
+
+    # normalize into [0..360)
+    user_az = user_az % 360.0
+    return {
+        "ideal_azimuth": ideal_azimuth,
+        "user_azimuth_effective": user_az,
+        "user_azimuth_provided": True,
+    }
+
+
+def calculate_solar_output(
+    latitude: float,
+    longitude: float,
+    system_power_kw: float,
+    user_tilt: float,
+    user_azimuth: Optional[float] = None,
+):
     """
     Solar Ninja — Basic Model (Fixed PDF Formatting)
-    ✅ This function is kept as your verified baseline logic.
+    ✅ Keeps your verified baseline logic, but fixes azimuth handling:
+      - Ideal azimuth: 180° (North hemi) or 0° (South hemi)
+      - User/Yo uses user azimuth if provided; otherwise uses ideal azimuth
+      - Optimal calculations always use ideal azimuth
     """
     # losses
     system_losses = 0.18
+
+    # ------------------------------------------------------------
+    # 0. Azimuth logic (NEW)
+    # ------------------------------------------------------------
+    az = _resolve_azimuths(latitude=float(latitude), user_azimuth=user_azimuth)
+    ideal_azimuth = float(az["ideal_azimuth"])
+    user_azimuth_effective = float(az["user_azimuth_effective"])
+    user_azimuth_provided = bool(az["user_azimuth_provided"])
 
     # ------------------------------------------------------------
     # 1. Time index
@@ -52,7 +129,7 @@ def calculate_solar_output(latitude, longitude, system_power_kw, user_tilt):
     # ------------------------------------------------------------
     # 2. Location & sun positions
     # ------------------------------------------------------------
-    location = Location(latitude=latitude, longitude=longitude, tz=timezone)
+    location = Location(latitude=float(latitude), longitude=float(longitude), tz=timezone)
     solar_position = location.get_solarposition(times)
 
     # ------------------------------------------------------------
@@ -63,7 +140,7 @@ def calculate_solar_output(latitude, longitude, system_power_kw, user_tilt):
     ghi_kw = ghi / 1000.0
 
     # ------------------------------------------------------------
-    # 4. Monthly optimal tilt (maximize kWh per month)
+    # 4. Monthly optimal tilt (maximize kWh per month) — uses IDEAL azimuth
     # ------------------------------------------------------------
     tilts = list(range(0, 91))
     hourly_energy_df = {}
@@ -71,7 +148,7 @@ def calculate_solar_output(latitude, longitude, system_power_kw, user_tilt):
     for t in tilts:
         aoi = irradiance.aoi(
             surface_tilt=t,
-            surface_azimuth=180,  # ✅ baseline: fixed azimuth
+            surface_azimuth=ideal_azimuth,  # ✅ fixed: ideal azimuth by hemisphere
             solar_zenith=solar_position["apparent_zenith"],
             solar_azimuth=solar_position["azimuth"]
         )
@@ -79,7 +156,7 @@ def calculate_solar_output(latitude, longitude, system_power_kw, user_tilt):
         cos_aoi[cos_aoi < 0] = 0
 
         poa = ghi_kw * cos_aoi * (1 - system_losses)
-        hourly_energy = poa * system_power_kw
+        hourly_energy = poa * float(system_power_kw)
 
         hourly_energy_df[f"tilt_{t}"] = hourly_energy
 
@@ -92,7 +169,7 @@ def calculate_solar_output(latitude, longitude, system_power_kw, user_tilt):
     monthly_best["Month"] = monthly_best.index.strftime("%B")
 
     # ------------------------------------------------------------
-    # 5. Annual optimal tilt
+    # 5. Annual optimal tilt — uses IDEAL azimuth
     # ------------------------------------------------------------
     best_tilt = None
     best_energy = -1.0
@@ -100,7 +177,7 @@ def calculate_solar_output(latitude, longitude, system_power_kw, user_tilt):
     for t in tilts:
         aoi = irradiance.aoi(
             surface_tilt=t,
-            surface_azimuth=180,  # ✅ baseline: fixed azimuth
+            surface_azimuth=ideal_azimuth,  # ✅ fixed: ideal azimuth by hemisphere
             solar_zenith=solar_position["apparent_zenith"],
             solar_azimuth=solar_position["azimuth"]
         )
@@ -108,21 +185,21 @@ def calculate_solar_output(latitude, longitude, system_power_kw, user_tilt):
         cos_aoi[cos_aoi < 0] = 0
 
         poa = ghi_kw * cos_aoi * (1 - system_losses)
-        energy = float((poa * system_power_kw).sum())
+        energy = float((poa * float(system_power_kw)).sum())
 
         if energy > best_energy:
             best_energy = energy
             best_tilt = t
 
-    annual_optimal_tilt = best_tilt
-    annual_optimal_energy = float(best_energy)  # ✅ already computed in your baseline loop
+    annual_optimal_tilt = int(best_tilt)
+    annual_optimal_energy = float(best_energy)  # ✅ computed in the loop
 
     # ------------------------------------------------------------
-    # 6. User tilt energy
+    # 6. User tilt energy — uses USER azimuth if provided, else IDEAL
     # ------------------------------------------------------------
     aoi_user = irradiance.aoi(
-        surface_tilt=user_tilt,
-        surface_azimuth=180,  # ✅ baseline: fixed azimuth
+        surface_tilt=float(user_tilt),
+        surface_azimuth=user_azimuth_effective,  # ✅ fixed
         solar_zenith=solar_position["apparent_zenith"],
         solar_azimuth=solar_position["azimuth"]
     )
@@ -131,7 +208,7 @@ def calculate_solar_output(latitude, longitude, system_power_kw, user_tilt):
     cos_user[cos_user < 0] = 0
 
     poa_user = ghi_kw * cos_user * (1 - system_losses)
-    hourly = poa_user * system_power_kw
+    hourly = poa_user * float(system_power_kw)
 
     monthly_energy = hourly.resample("M").sum()
     annual_energy = float(hourly.sum())
@@ -141,7 +218,7 @@ def calculate_solar_output(latitude, longitude, system_power_kw, user_tilt):
         "Energy (kWh)": monthly_energy.values.round(0)  # ✅ keep your rounding
     })
 
-    # monthly generation for ANNUAL optimal tilt (from already computed df_energy)
+    # monthly generation for ANNUAL optimal tilt (IDEAL azimuth, from df_energy)
     monthly_opt_yearly = df_energy[f"tilt_{annual_optimal_tilt}"].resample("M").sum()
     monthly_opt_df = pd.DataFrame({
         "Month": monthly_opt_yearly.index.strftime("%B"),
@@ -153,7 +230,7 @@ def calculate_solar_output(latitude, longitude, system_power_kw, user_tilt):
     # ------------------------------------------------------------
     fig, ax = plt.subplots(figsize=(7, 4), dpi=150)
     ax.bar(monthly_df["Month"], monthly_df["Energy (kWh)"], color="orange")
-    ax.set_title(f"Monthly Energy Output (Tilt = {user_tilt:.1f}°)")
+    ax.set_title(f"Monthly Energy Output (Tilt = {float(user_tilt):.1f}°)")
     ax.set_xlabel("Month")
     ax.set_ylabel("Energy (kWh)")
     plt.xticks(rotation=45)
@@ -190,9 +267,9 @@ def calculate_solar_output(latitude, longitude, system_power_kw, user_tilt):
 
     summary_data = [
         ["Parameter", "Value"],
-        ["Location (Lat, Lon)", f"{latitude:.4f}, {longitude:.4f}"],
-        ["System Power", f"{system_power_kw:.2f} kW"],
-        ["User Tilt", f"{user_tilt:.1f}°"],
+        ["Location (Lat, Lon)", f"{float(latitude):.4f}, {float(longitude):.4f}"],
+        ["System Power", f"{float(system_power_kw):.2f} kW"],
+        ["User Tilt", f"{float(user_tilt):.1f}°"],
         ["Optimal Annual Tilt", f"{annual_optimal_tilt}°"],
         ["Total Annual Energy", f"{annual_energy:,.0f} kWh"],
     ]
@@ -250,6 +327,10 @@ def calculate_solar_output(latitude, longitude, system_power_kw, user_tilt):
         "annual_optimal_tilt": annual_optimal_tilt,
         "fig": fig,
         "pdf": pdf_buffer,
+        # extra (safe): for debugging / future UI use
+        "ideal_azimuth": ideal_azimuth,
+        "user_azimuth_effective": user_azimuth_effective,
+        "user_azimuth_provided": user_azimuth_provided,
     }
 
 
@@ -258,20 +339,21 @@ def run_for_ui(
     longitude: float,
     system_power_kw: float,
     user_tilt: float,
-    user_azimuth: float,
+    user_azimuth: Optional[float],
 ) -> UIOutput:
     """
     Adapter for the provided app.py.
 
-    NOTE:
-    - Baseline model uses fixed azimuth=180° in ALL calculations.
-    - user_azimuth is accepted for UI compatibility but NOT applied, to keep the verified baseline unchanged.
+    Azimuth rules:
+    - Optimal series (optimal tilt, optimal generation) => IDEAL azimuth (180° north hemi, 0° south hemi)
+    - Your/Yo series => user azimuth if provided; else IDEAL azimuth
     """
     res = calculate_solar_output(
         latitude=float(latitude),
         longitude=float(longitude),
         system_power_kw=float(system_power_kw),
         user_tilt=float(user_tilt),
+        user_azimuth=user_azimuth,
     )
 
     annual_kwh_user = float(res["annual_energy"])
@@ -283,14 +365,10 @@ def run_for_ui(
         potential_pct = (annual_kwh_optimal - annual_kwh_user) / annual_kwh_user * 100.0
 
     # Build monthly chart df for Plotly (as app.py expects)
-    # Use Jan..Dec short labels
     months_dt = pd.date_range("2025-01-01", periods=12, freq="MS")
     month_short = months_dt.strftime("%b").tolist()
 
-    # user monthly
     user_monthly = res["monthly_df"]["Energy (kWh)"].astype(float).tolist()
-
-    # optimal yearly tilt monthly
     opt_monthly = res["monthly_opt_df"]["Energy (kWh)"].astype(float).tolist()
 
     monthly_chart_df = pd.DataFrame({
@@ -299,26 +377,33 @@ def run_for_ui(
         "kwh_optimal_yearly": opt_monthly,
     })
 
-    # Tilt by month tiles
     tilt_by_month_df = res["monthly_best"][["Month", "Best Tilt (deg)"]].copy()
     tilt_by_month_df = tilt_by_month_df.rename(columns={"Best Tilt (deg)": "BestTiltDeg"})
 
     # Recommendations (UI text only, does not affect calculations)
+    ideal_az = float(res.get("ideal_azimuth", 180.0))
+    user_az_eff = float(res.get("user_azimuth_effective", ideal_az))
+    user_az_provided = bool(res.get("user_azimuth_provided", False))
+
+    az_line = (
+        f"Azimuth used for Your/Yo: {user_az_eff:.0f}°."
+        if user_az_provided
+        else f"Azimuth not specified — using default (by hemisphere): {ideal_az:.0f}°."
+    )
+
     recommendations = [
         f"Your tilt angle is {float(user_tilt):.1f}° and the annual optimal tilt for this location is {optimal_angle}°.",
-        f"Estimated potential change vs your current tilt: {potential_pct:+.1f}%.",
+        f"Estimated potential change vs your current setup: {potential_pct:+.1f}%.",
         "Monthly optimal tilt may further improve generation if your mounting system allows seasonal adjustment.",
-        "Note: this baseline model assumes south-facing azimuth (180°) for calculations.",
+        az_line,
     ]
 
-    # Convert PDF buffer -> bytes for Streamlit download button
     pdf_bytes = None
     try:
         pdf_bytes = res["pdf"].getvalue()
     except Exception:
         pdf_bytes = None
 
-    # Close figure to avoid memory leaks in Streamlit reruns
     try:
         plt.close(res["fig"])
     except Exception:
