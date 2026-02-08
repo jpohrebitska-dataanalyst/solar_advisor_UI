@@ -4,6 +4,14 @@ from contextlib import contextmanager
 
 from utils.base_model import run_for_ui
 
+# Map deps (needed for click-to-select location)
+try:
+    import folium
+    from streamlit_folium import st_folium
+except Exception:
+    folium = None
+    st_folium = None
+
 
 @contextmanager
 def white_card():
@@ -56,8 +64,6 @@ section.main > div{ padding-top:0.10rem; }
 }
 
 /* ---------- White cards for containers(border=True) ---------- */
-/* Streamlit can render slightly different structures per version.
-   We paint wrapper + inner blocks to guarantee WHITE content. */
 :root{
   --card-radius: 20px;
   --card-shadow: 0 10px 28px rgba(15,23,42,.08);
@@ -78,7 +84,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div{
   border-radius:var(--card-radius) !important;
 }
 
-/* Deeper inner blocks (this fixes "grey inside" on some themes/versions) */
+/* Deeper inner blocks */
 div[data-testid="stVerticalBlockBorderWrapper"] *{
   background-color: transparent;
 }
@@ -168,17 +174,60 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# --- Location state (map -> lat/lon) ---
+DEFAULT_LAT = 50.45
+DEFAULT_LON = 30.52
+
+if "latitude" not in st.session_state:
+    st.session_state.latitude = float(DEFAULT_LAT)
+if "longitude" not in st.session_state:
+    st.session_state.longitude = float(DEFAULT_LON)
+
 left, right = st.columns([0.38, 0.62])
 
 with left:
     with white_card():
         st.markdown("<div class='section-title'>System Parameters</div>", unsafe_allow_html=True)
 
-        with st.form("calc_form", border=False):
-            st.markdown("**📍 Location**")
-            latitude = st.number_input("Latitude (°)", value=50.45, format="%.4f")
-            longitude = st.number_input("Longitude (°)", value=30.52, format="%.4f")
+        # --- Location (MAP) ---
+        st.markdown("**📍 Location**")
 
+        if folium is not None and st_folium is not None:
+            # build folium map
+            m = folium.Map(
+                location=[st.session_state.latitude, st.session_state.longitude],
+                zoom_start=9,
+                control_scale=False,
+                tiles="CartoDB positron",
+            )
+            folium.Marker(
+                [st.session_state.latitude, st.session_state.longitude],
+            ).add_to(m)
+
+            map_data = st_folium(m, height=260, key="location_map")
+
+            # update state on click (no text output)
+            if map_data and isinstance(map_data, dict):
+                last_clicked = map_data.get("last_clicked")
+                if last_clicked and isinstance(last_clicked, dict):
+                    lat = last_clicked.get("lat")
+                    lng = last_clicked.get("lng")
+                    if lat is not None and lng is not None:
+                        st.session_state.latitude = float(lat)
+                        st.session_state.longitude = float(lng)
+
+            latitude = float(st.session_state.latitude)
+            longitude = float(st.session_state.longitude)
+
+        else:
+            # Fallback (if deps not installed) — keeps app running
+            latitude = st.number_input("Latitude (°)", value=float(st.session_state.latitude), format="%.4f")
+            longitude = st.number_input("Longitude (°)", value=float(st.session_state.longitude), format="%.4f")
+            st.session_state.latitude = float(latitude)
+            st.session_state.longitude = float(longitude)
+
+        # --- Form: other params + Calculate button (same flow as before) ---
+        with st.form("calc_form", border=False):
             st.divider()
             st.markdown("**⚡ System power**")
             system_power_kw = st.number_input("System power (kW)", value=10.0, step=0.5)
@@ -189,7 +238,10 @@ with left:
 
             st.divider()
             st.markdown("**🧭 Orientation (azimuth)**")
-            user_azimuth = st.slider("Azimuth (°)", 0, 360, 180)
+
+            auto_azimuth = st.checkbox("Auto azimuth (by hemisphere)", value=True)
+            az_slider = st.slider("Azimuth (°)", 0, 360, 180, disabled=auto_azimuth)
+            user_azimuth = None if auto_azimuth else az_slider
 
             submitted = st.form_submit_button("⚡ Calculate", use_container_width=True)
 
@@ -284,7 +336,6 @@ with right:
         months = m_df["Month"].tolist()
         tilts = m_df["BestTiltDeg"].astype(int).tolist()
 
-        # Add some inner breathing room (makes card feel taller)
         spacer(6)
 
         row1 = st.columns(6)
