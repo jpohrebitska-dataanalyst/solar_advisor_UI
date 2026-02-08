@@ -5,5 +5,3 @@ pvlib
 matplotlib
 plotly
 reportlab
-streamlit-folium
-folium
