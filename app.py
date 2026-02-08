@@ -93,7 +93,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] > div{
   border-radius:var(--card-radius) !important;
 }
 
-/* Deeper inner blocks (fix "grey inside" on some themes/versions) */
+/* Deeper inner blocks */
 div[data-testid="stVerticalBlockBorderWrapper"] *{
   background-color: transparent;
 }
@@ -183,17 +183,25 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# --- Defaults ---
 DEFAULT_LAT = 50.45
 DEFAULT_LON = 30.52
 
-if "latitude" not in st.session_state:
-    st.session_state.latitude = float(DEFAULT_LAT)
-if "longitude" not in st.session_state:
-    st.session_state.longitude = float(DEFAULT_LON)
+# --- Canonical lat/lon (NOT widget keys) ---
+if "lat" not in st.session_state:
+    st.session_state.lat = float(DEFAULT_LAT)
+if "lon" not in st.session_state:
+    st.session_state.lon = float(DEFAULT_LON)
 
-# normalize any previously-stored values (prevents -214 showing in inputs)
-st.session_state.latitude = _clamp_lat(st.session_state.latitude)
-st.session_state.longitude = _wrap_lon(st.session_state.longitude)
+# Normalize canonical (safe always)
+st.session_state.lat = _clamp_lat(st.session_state.lat)
+st.session_state.lon = _wrap_lon(st.session_state.lon)
+
+# Widget values (separate keys)
+if "lat_in" not in st.session_state:
+    st.session_state.lat_in = float(st.session_state.lat)
+if "lon_in" not in st.session_state:
+    st.session_state.lon_in = float(st.session_state.lon)
 
 left, right = st.columns([0.38, 0.62])
 
@@ -202,18 +210,18 @@ with left:
         st.markdown("<div class='section-title'>System Parameters</div>", unsafe_allow_html=True)
 
         # --------------------------
-        # Location (MAP) + lat/lon
+        # Location (MAP) + inputs
         # --------------------------
         st.markdown("**📍 Location**")
 
         if folium is not None and st_folium is not None:
             m = folium.Map(
-                location=[st.session_state.latitude, st.session_state.longitude],
+                location=[float(st.session_state.lat), float(st.session_state.lon)],
                 zoom_start=10,
                 control_scale=False,
                 tiles="CartoDB positron",
             )
-            folium.Marker([st.session_state.latitude, st.session_state.longitude]).add_to(m)
+            folium.Marker([float(st.session_state.lat), float(st.session_state.lon)]).add_to(m)
 
             map_data = st_folium(
                 m,
@@ -232,37 +240,41 @@ with left:
                         new_lon = _wrap_lon(float(lng))
 
                         if (
-                            abs(new_lat - float(st.session_state.latitude)) > 1e-9
-                            or abs(new_lon - float(st.session_state.longitude)) > 1e-9
+                            abs(new_lat - float(st.session_state.lat)) > 1e-9
+                            or abs(new_lon - float(st.session_state.lon)) > 1e-9
                         ):
-                            st.session_state.latitude = new_lat
-                            st.session_state.longitude = new_lon
+                            # update canonical + widget values BEFORE inputs render in this run
+                            st.session_state.lat = new_lat
+                            st.session_state.lon = new_lon
+                            st.session_state.lat_in = new_lat
+                            st.session_state.lon_in = new_lon
                             try:
                                 st.rerun()
                             except Exception:
                                 st.experimental_rerun()
 
-        # inputs (bounded + synced)
-        latitude = st.number_input(
+        # inputs (bounded)
+        lat_in = st.number_input(
             "Latitude (°)",
-            value=float(st.session_state.latitude),
+            value=float(st.session_state.lat_in),
             min_value=-90.0, max_value=90.0,
             format="%.4f",
-            key="latitude",
+            key="lat_in",
         )
-        longitude = st.number_input(
+        lon_in = st.number_input(
             "Longitude (°)",
-            value=float(st.session_state.longitude),
+            value=float(st.session_state.lon_in),
             min_value=-180.0, max_value=180.0,
             format="%.4f",
-            key="longitude",
+            key="lon_in",
         )
 
-        # normalize after manual edits too
-        st.session_state.latitude = _clamp_lat(st.session_state.latitude)
-        st.session_state.longitude = _wrap_lon(st.session_state.longitude)
-        latitude = float(st.session_state.latitude)
-        longitude = float(st.session_state.longitude)
+        # Update canonical from inputs (safe: different keys)
+        st.session_state.lat = _clamp_lat(lat_in)
+        st.session_state.lon = _wrap_lon(lon_in)
+
+        latitude = float(st.session_state.lat)
+        longitude = float(st.session_state.lon)
 
         st.divider()
 
@@ -296,11 +308,12 @@ with left:
         if "last_manual_azimuth" not in st.session_state:
             st.session_state.last_manual_azimuth = 180
 
+        # keep slider synced when auto is ON (and latitude changed)
         if st.session_state.auto_azimuth and int(st.session_state.azimuth_value) != int(ideal_azimuth):
             st.session_state.azimuth_value = int(ideal_azimuth)
 
         def _on_auto_toggle():
-            ideal = 180 if float(st.session_state.latitude) >= 0 else 0
+            ideal = 180 if float(st.session_state.lat) >= 0 else 0
             if st.session_state.auto_azimuth:
                 st.session_state.last_manual_azimuth = int(st.session_state.azimuth_value)
                 st.session_state.azimuth_value = int(ideal)
@@ -339,6 +352,7 @@ with right:
 
     out = st.session_state.ui_result
 
+    # Download (no card)
     a, b = st.columns([0.70, 0.30])
     with a:
         st.empty()
@@ -356,6 +370,7 @@ with right:
 
     spacer(18)
 
+    # KPI row
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         st.markdown(
@@ -380,6 +395,7 @@ with right:
 
     spacer(22)
 
+    # Monthly chart card
     with white_card():
         st.markdown("<div class='section-title'>Monthly generation (kWh)</div>", unsafe_allow_html=True)
         df = out.monthly_chart_df
@@ -406,6 +422,7 @@ with right:
 
     spacer(22)
 
+    # Optimal tilt by month
     with white_card():
         st.markdown("<div class='section-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
 
