@@ -35,6 +35,15 @@ class UIOutput:
     pdf_bytes: Optional[bytes]
 
 
+def _clamp_lat(lat: float) -> float:
+    return max(-90.0, min(90.0, float(lat)))
+
+
+def _wrap_lon(lon: float) -> float:
+    # normalize to [-180, 180)
+    return ((float(lon) + 180.0) % 360.0) - 180.0
+
+
 def _parse_optional_float(x: Any) -> Optional[float]:
     """
     Robust parsing:
@@ -53,7 +62,6 @@ def _parse_optional_float(x: Any) -> Optional[float]:
         except ValueError:
             return None
 
-    # numpy float / python float / int
     try:
         val = float(x)
     except (TypeError, ValueError):
@@ -100,16 +108,24 @@ def calculate_solar_output(
 ):
     """
     Solar Ninja — Basic Model (Fixed PDF Formatting)
-    ✅ Keeps your verified baseline logic, but fixes azimuth handling:
+
+    Azimuth rules:
       - Ideal azimuth: 180° (North hemi) or 0° (South hemi)
       - User/Yo uses user azimuth if provided; otherwise uses ideal azimuth
       - Optimal calculations always use ideal azimuth
+
+    Safety:
+      - Clamp/wrap coordinates to avoid pvlib altitude lookup index errors.
     """
+    # --- normalize coordinates (NEW safety) ---
+    latitude = _clamp_lat(latitude)
+    longitude = _wrap_lon(longitude)
+
     # losses
     system_losses = 0.18
 
     # ------------------------------------------------------------
-    # 0. Azimuth logic (NEW)
+    # 0. Azimuth logic
     # ------------------------------------------------------------
     az = _resolve_azimuths(latitude=float(latitude), user_azimuth=user_azimuth)
     ideal_azimuth = float(az["ideal_azimuth"])
@@ -140,7 +156,7 @@ def calculate_solar_output(
     ghi_kw = ghi / 1000.0
 
     # ------------------------------------------------------------
-    # 4. Monthly optimal tilt (maximize kWh per month) — uses IDEAL azimuth
+    # 4. Monthly optimal tilt — IDEAL azimuth
     # ------------------------------------------------------------
     tilts = list(range(0, 91))
     hourly_energy_df = {}
@@ -148,7 +164,7 @@ def calculate_solar_output(
     for t in tilts:
         aoi = irradiance.aoi(
             surface_tilt=t,
-            surface_azimuth=ideal_azimuth,  # ✅ fixed: ideal azimuth by hemisphere
+            surface_azimuth=ideal_azimuth,
             solar_zenith=solar_position["apparent_zenith"],
             solar_azimuth=solar_position["azimuth"]
         )
@@ -169,7 +185,7 @@ def calculate_solar_output(
     monthly_best["Month"] = monthly_best.index.strftime("%B")
 
     # ------------------------------------------------------------
-    # 5. Annual optimal tilt — uses IDEAL azimuth
+    # 5. Annual optimal tilt — IDEAL azimuth
     # ------------------------------------------------------------
     best_tilt = None
     best_energy = -1.0
@@ -177,7 +193,7 @@ def calculate_solar_output(
     for t in tilts:
         aoi = irradiance.aoi(
             surface_tilt=t,
-            surface_azimuth=ideal_azimuth,  # ✅ fixed: ideal azimuth by hemisphere
+            surface_azimuth=ideal_azimuth,
             solar_zenith=solar_position["apparent_zenith"],
             solar_azimuth=solar_position["azimuth"]
         )
@@ -192,14 +208,14 @@ def calculate_solar_output(
             best_tilt = t
 
     annual_optimal_tilt = int(best_tilt)
-    annual_optimal_energy = float(best_energy)  # ✅ computed in the loop
+    annual_optimal_energy = float(best_energy)
 
     # ------------------------------------------------------------
-    # 6. User tilt energy — uses USER azimuth if provided, else IDEAL
+    # 6. User tilt energy — USER azimuth if provided, else IDEAL
     # ------------------------------------------------------------
     aoi_user = irradiance.aoi(
         surface_tilt=float(user_tilt),
-        surface_azimuth=user_azimuth_effective,  # ✅ fixed
+        surface_azimuth=user_azimuth_effective,
         solar_zenith=solar_position["apparent_zenith"],
         solar_azimuth=solar_position["azimuth"]
     )
@@ -215,18 +231,18 @@ def calculate_solar_output(
 
     monthly_df = pd.DataFrame({
         "Month": monthly_energy.index.strftime("%B"),
-        "Energy (kWh)": monthly_energy.values.round(0)  # ✅ keep your rounding
+        "Energy (kWh)": monthly_energy.values.round(0)
     })
 
-    # monthly generation for ANNUAL optimal tilt (IDEAL azimuth, from df_energy)
+    # monthly generation for ANNUAL optimal tilt (IDEAL azimuth)
     monthly_opt_yearly = df_energy[f"tilt_{annual_optimal_tilt}"].resample("M").sum()
     monthly_opt_df = pd.DataFrame({
         "Month": monthly_opt_yearly.index.strftime("%B"),
-        "Energy (kWh)": monthly_opt_yearly.values.round(0)  # ✅ keep same rounding style
+        "Energy (kWh)": monthly_opt_yearly.values.round(0)
     })
 
     # ------------------------------------------------------------
-    # 7. Generate Charts (Matplotlib) (your baseline bar chart for PDF)
+    # 7. Chart for PDF (baseline)
     # ------------------------------------------------------------
     fig, ax = plt.subplots(figsize=(7, 4), dpi=150)
     ax.bar(monthly_df["Month"], monthly_df["Energy (kWh)"], color="orange")
@@ -241,7 +257,7 @@ def calculate_solar_output(
     img_buffer.seek(0)
 
     # ------------------------------------------------------------
-    # 8. Generate Professional PDF using PLATYPUS (your baseline)
+    # 8. PDF (baseline)
     # ------------------------------------------------------------
     pdf_buffer = BytesIO()
 
@@ -256,7 +272,7 @@ def calculate_solar_output(
     title_style = ParagraphStyle(
         "CustomTitle",
         parent=styles["Heading1"],
-        alignment=1,  # center
+        alignment=1,
         spaceAfter=20,
         fontSize=18
     )
@@ -327,7 +343,6 @@ def calculate_solar_output(
         "annual_optimal_tilt": annual_optimal_tilt,
         "fig": fig,
         "pdf": pdf_buffer,
-        # extra (safe): for debugging / future UI use
         "ideal_azimuth": ideal_azimuth,
         "user_azimuth_effective": user_azimuth_effective,
         "user_azimuth_provided": user_azimuth_provided,
@@ -343,10 +358,6 @@ def run_for_ui(
 ) -> UIOutput:
     """
     Adapter for the provided app.py.
-
-    Azimuth rules:
-    - Optimal series (optimal tilt, optimal generation) => IDEAL azimuth (180° north hemi, 0° south hemi)
-    - Your/Yo series => user azimuth if provided; else IDEAL azimuth
     """
     res = calculate_solar_output(
         latitude=float(latitude),
@@ -364,7 +375,6 @@ def run_for_ui(
     if annual_kwh_user != 0:
         potential_pct = (annual_kwh_optimal - annual_kwh_user) / annual_kwh_user * 100.0
 
-    # Build monthly chart df for Plotly (as app.py expects)
     months_dt = pd.date_range("2025-01-01", periods=12, freq="MS")
     month_short = months_dt.strftime("%b").tolist()
 
@@ -380,7 +390,6 @@ def run_for_ui(
     tilt_by_month_df = res["monthly_best"][["Month", "Best Tilt (deg)"]].copy()
     tilt_by_month_df = tilt_by_month_df.rename(columns={"Best Tilt (deg)": "BestTiltDeg"})
 
-    # Recommendations (UI text only, does not affect calculations)
     ideal_az = float(res.get("ideal_azimuth", 180.0))
     user_az_eff = float(res.get("user_azimuth_effective", ideal_az))
     user_az_provided = bool(res.get("user_azimuth_provided", False))
