@@ -27,6 +27,15 @@ def spacer(px: int = 18):
     st.markdown(f"<div style='height:{px}px'></div>", unsafe_allow_html=True)
 
 
+def _clamp_lat(lat: float) -> float:
+    return max(-90.0, min(90.0, float(lat)))
+
+
+def _wrap_lon(lon: float) -> float:
+    # normalize to [-180, 180)
+    return ((float(lon) + 180.0) % 360.0) - 180.0
+
+
 st.set_page_config(page_title="Solar Ninja", page_icon="☀️", layout="wide")
 
 st.markdown(
@@ -174,15 +183,17 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- Defaults ---
 DEFAULT_LAT = 50.45
 DEFAULT_LON = 30.52
 
-# --- Ensure session state exists ---
 if "latitude" not in st.session_state:
     st.session_state.latitude = float(DEFAULT_LAT)
 if "longitude" not in st.session_state:
     st.session_state.longitude = float(DEFAULT_LON)
+
+# normalize any previously-stored values (prevents -214 showing in inputs)
+st.session_state.latitude = _clamp_lat(st.session_state.latitude)
+st.session_state.longitude = _wrap_lon(st.session_state.longitude)
 
 left, right = st.columns([0.38, 0.62])
 
@@ -217,8 +228,8 @@ with left:
                     lat = last_clicked.get("lat")
                     lng = last_clicked.get("lng")
                     if lat is not None and lng is not None:
-                        new_lat = float(lat)
-                        new_lon = float(lng)
+                        new_lat = _clamp_lat(float(lat))
+                        new_lon = _wrap_lon(float(lng))
 
                         if (
                             abs(new_lat - float(st.session_state.latitude)) > 1e-9
@@ -231,9 +242,27 @@ with left:
                             except Exception:
                                 st.experimental_rerun()
 
-        # lat/lon inputs (synced with map via session_state)
-        latitude = st.number_input("Latitude (°)", value=float(st.session_state.latitude), format="%.4f", key="latitude")
-        longitude = st.number_input("Longitude (°)", value=float(st.session_state.longitude), format="%.4f", key="longitude")
+        # inputs (bounded + synced)
+        latitude = st.number_input(
+            "Latitude (°)",
+            value=float(st.session_state.latitude),
+            min_value=-90.0, max_value=90.0,
+            format="%.4f",
+            key="latitude",
+        )
+        longitude = st.number_input(
+            "Longitude (°)",
+            value=float(st.session_state.longitude),
+            min_value=-180.0, max_value=180.0,
+            format="%.4f",
+            key="longitude",
+        )
+
+        # normalize after manual edits too
+        st.session_state.latitude = _clamp_lat(st.session_state.latitude)
+        st.session_state.longitude = _wrap_lon(st.session_state.longitude)
+        latitude = float(st.session_state.latitude)
+        longitude = float(st.session_state.longitude)
 
         st.divider()
 
@@ -267,19 +296,15 @@ with left:
         if "last_manual_azimuth" not in st.session_state:
             st.session_state.last_manual_azimuth = 180
 
-        # keep slider synced when auto is ON (and latitude changed)
         if st.session_state.auto_azimuth and int(st.session_state.azimuth_value) != int(ideal_azimuth):
             st.session_state.azimuth_value = int(ideal_azimuth)
 
         def _on_auto_toggle():
             ideal = 180 if float(st.session_state.latitude) >= 0 else 0
-
             if st.session_state.auto_azimuth:
-                # switching ON auto: remember manual, set to ideal
                 st.session_state.last_manual_azimuth = int(st.session_state.azimuth_value)
                 st.session_state.azimuth_value = int(ideal)
             else:
-                # switching OFF auto: restore last manual (or ideal if none)
                 st.session_state.azimuth_value = int(st.session_state.get("last_manual_azimuth", ideal))
 
         auto_azimuth = st.checkbox(
@@ -299,7 +324,6 @@ with left:
 
         user_azimuth = None if auto_azimuth else float(az_slider)
 
-        # Calculate button (reactive; same visual styling)
         submitted = st.button("⚡ Calculate", use_container_width=True)
 
 with right:
@@ -315,7 +339,6 @@ with right:
 
     out = st.session_state.ui_result
 
-    # Download (no card)
     a, b = st.columns([0.70, 0.30])
     with a:
         st.empty()
@@ -333,7 +356,6 @@ with right:
 
     spacer(18)
 
-    # KPI row
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         st.markdown(
@@ -358,7 +380,6 @@ with right:
 
     spacer(22)
 
-    # Monthly chart card
     with white_card():
         st.markdown("<div class='section-title'>Monthly generation (kWh)</div>", unsafe_allow_html=True)
         df = out.monthly_chart_df
@@ -385,7 +406,6 @@ with right:
 
     spacer(22)
 
-    # Optimal tilt by month
     with white_card():
         st.markdown("<div class='section-title'>Optimal tilt by month</div>", unsafe_allow_html=True)
 
