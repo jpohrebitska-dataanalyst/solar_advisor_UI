@@ -117,7 +117,7 @@ def calculate_solar_output(
     Safety:
       - Clamp/wrap coordinates to avoid pvlib altitude lookup index errors.
     """
-    # --- normalize coordinates (NEW safety) ---
+    # --- normalize coordinates (safety) ---
     latitude = _clamp_lat(latitude)
     longitude = _wrap_lon(longitude)
 
@@ -346,6 +346,9 @@ def calculate_solar_output(
         "ideal_azimuth": ideal_azimuth,
         "user_azimuth_effective": user_azimuth_effective,
         "user_azimuth_provided": user_azimuth_provided,
+        # (optional debug)
+        "latitude_norm": float(latitude),
+        "longitude_norm": float(longitude),
     }
 
 
@@ -358,7 +361,14 @@ def run_for_ui(
 ) -> UIOutput:
     """
     Adapter for the provided app.py.
+
+    NOTE (lat/lon safety):
+    - Normalize lat/lon here too, to ensure safety even if caller passes out-of-range values.
     """
+    # ✅ extra safety (NEW): normalize BEFORE calling calculate_solar_output
+    latitude = _clamp_lat(latitude)
+    longitude = _wrap_lon(longitude)
+
     res = calculate_solar_output(
         latitude=float(latitude),
         longitude=float(longitude),
