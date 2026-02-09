@@ -193,7 +193,7 @@ if "lat" not in st.session_state:
 if "lon" not in st.session_state:
     st.session_state.lon = float(DEFAULT_LON)
 
-# Normalize canonical (safe always)
+# Normalize canonical
 st.session_state.lat = _clamp_lat(st.session_state.lat)
 st.session_state.lon = _wrap_lon(st.session_state.lon)
 
@@ -243,7 +243,6 @@ with left:
                             abs(new_lat - float(st.session_state.lat)) > 1e-9
                             or abs(new_lon - float(st.session_state.lon)) > 1e-9
                         ):
-                            # update canonical + widget values BEFORE inputs render in this run
                             st.session_state.lat = new_lat
                             st.session_state.lon = new_lon
                             st.session_state.lat_in = new_lat
@@ -253,7 +252,6 @@ with left:
                             except Exception:
                                 st.experimental_rerun()
 
-        # inputs (bounded)
         lat_in = st.number_input(
             "Latitude (°)",
             value=float(st.session_state.lat_in),
@@ -269,7 +267,6 @@ with left:
             key="lon_in",
         )
 
-        # Update canonical from inputs (safe: different keys)
         st.session_state.lat = _clamp_lat(lat_in)
         st.session_state.lon = _wrap_lon(lon_in)
 
@@ -295,7 +292,7 @@ with left:
         st.divider()
 
         # --------------------------
-        # Azimuth (instant toggle + auto sets 180/0)
+        # Azimuth
         # --------------------------
         st.markdown("**🧭 Orientation (azimuth)**")
 
@@ -308,7 +305,6 @@ with left:
         if "last_manual_azimuth" not in st.session_state:
             st.session_state.last_manual_azimuth = 180
 
-        # keep slider synced when auto is ON (and latitude changed)
         if st.session_state.auto_azimuth and int(st.session_state.azimuth_value) != int(ideal_azimuth):
             st.session_state.azimuth_value = int(ideal_azimuth)
 
@@ -352,7 +348,7 @@ with right:
 
     out = st.session_state.ui_result
 
-    # Download (no card)
+    # Download
     a, b = st.columns([0.70, 0.30])
     with a:
         st.empty()
@@ -416,7 +412,10 @@ with right:
             margin=dict(l=10, r=10, t=10, b=10),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             xaxis=dict(showgrid=False),
-            yaxis=dict(gridcolor="rgba(15,23,42,0.08)"),
+            yaxis=dict(
+                gridcolor="rgba(15,23,42,0.08)",
+                rangemode="tozero",  # ✅ Y always from 0
+            ),
         )
         st.plotly_chart(fig, use_container_width=True)
 
