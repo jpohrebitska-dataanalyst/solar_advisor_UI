@@ -252,16 +252,15 @@ with left:
                             except Exception:
                                 st.experimental_rerun()
 
+        # ✅ IMPORTANT: do NOT pass value= when using key= to avoid Streamlit warning
         lat_in = st.number_input(
             "Latitude (°)",
-            value=float(st.session_state.lat_in),
             min_value=-90.0, max_value=90.0,
             format="%.4f",
             key="lat_in",
         )
         lon_in = st.number_input(
             "Longitude (°)",
-            value=float(st.session_state.lon_in),
             min_value=-180.0, max_value=180.0,
             format="%.4f",
             key="lon_in",
