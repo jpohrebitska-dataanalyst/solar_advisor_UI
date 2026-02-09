@@ -293,7 +293,7 @@ def calculate_solar_output(
     ]))
 
     story.append(summary_table)
-    story.append(Spacer(1, 8))  # мінімальна між title/table
+    story.append(Spacer(1, 16))  # мінімальна між title/table
 
     # середня відстань між блоками
     story.append(Paragraph("Monthly Energy Production Chart:", h_style))
@@ -302,7 +302,7 @@ def calculate_solar_output(
     rl_image = PDFImage(img_buffer, width=470, height=200)  # нижче, щоб влазило
     story.append(rl_image)
 
-    story.append(Spacer(1, 8))  # середня між чартом і breakdown
+    story.append(Spacer(1, 14))  # середня між чартом і breakdown
 
     story.append(Paragraph("Monthly Breakdown:", h_style))
     story.append(Spacer(1, 4))  # мінімальна
