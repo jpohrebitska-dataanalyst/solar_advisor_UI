@@ -291,41 +291,49 @@ with left:
         st.divider()
 
         # --------------------------
-        # Azimuth
+        # Azimuth (NO warnings)
         # --------------------------
         st.markdown("**🧭 Orientation (azimuth)**")
 
         ideal_azimuth = 180 if float(latitude) >= 0 else 0
 
-        if "auto_azimuth" not in st.session_state:
-            st.session_state.auto_azimuth = True
-        if "azimuth_value" not in st.session_state:
-            st.session_state.azimuth_value = int(ideal_azimuth)
-        if "last_manual_azimuth" not in st.session_state:
-            st.session_state.last_manual_azimuth = 180
+        # ✅ init session state safely (BEFORE widgets)
+        st.session_state.setdefault("auto_azimuth", True)
+        st.session_state.setdefault("azimuth_value", int(ideal_azimuth))
+        st.session_state.setdefault("last_manual_azimuth", 180)
 
+        # make sure azimuth_value is always int
+        try:
+            st.session_state.azimuth_value = int(st.session_state.azimuth_value) % 361
+        except Exception:
+            st.session_state.azimuth_value = int(ideal_azimuth)
+
+        # keep slider synced when auto is ON (and latitude changed)
         if st.session_state.auto_azimuth and int(st.session_state.azimuth_value) != int(ideal_azimuth):
             st.session_state.azimuth_value = int(ideal_azimuth)
 
         def _on_auto_toggle():
             ideal = 180 if float(st.session_state.lat) >= 0 else 0
+
             if st.session_state.auto_azimuth:
+                # switching ON auto: remember manual, set to ideal
                 st.session_state.last_manual_azimuth = int(st.session_state.azimuth_value)
                 st.session_state.azimuth_value = int(ideal)
             else:
+                # switching OFF auto: restore last manual (or ideal if none)
                 st.session_state.azimuth_value = int(st.session_state.get("last_manual_azimuth", ideal))
 
+        # ✅ IMPORTANT: no "value=" to avoid Streamlit warning
         auto_azimuth = st.checkbox(
             "Auto azimuth (by hemisphere)",
-            value=st.session_state.auto_azimuth,
             key="auto_azimuth",
             on_change=_on_auto_toggle,
         )
 
+        # ✅ IMPORTANT: no "value=" here either
         az_slider = st.slider(
             "Azimuth (°)",
             0, 360,
-            value=int(st.session_state.azimuth_value),
             key="azimuth_value",
             disabled=auto_azimuth,
         )
@@ -347,7 +355,7 @@ with right:
 
     out = st.session_state.ui_result
 
-    # Download
+    # Download (no card)
     a, b = st.columns([0.70, 0.30])
     with a:
         st.empty()
@@ -413,7 +421,7 @@ with right:
             xaxis=dict(showgrid=False),
             yaxis=dict(
                 gridcolor="rgba(15,23,42,0.08)",
-                rangemode="tozero",  # ✅ Y always from 0
+                rangemode="tozero",  # ✅ always from 0
             ),
         )
         st.plotly_chart(fig, use_container_width=True)
