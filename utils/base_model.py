@@ -169,10 +169,10 @@ def calculate_solar_output(
     poa_user = ghi_kw * cos_user * (1 - system_losses)
     hourly_user = poa_user * float(system_power_kw)
 
-    monthly_user = hourly_user.resample("M").sum()
+    monthly_user = hourly_user.resample("ME").sum()
     annual_energy = float(hourly_user.sum())
 
-    monthly_opt = df_energy[f"tilt_{annual_optimal_tilt}"].resample("M").sum()
+    monthly_opt = df_energy[f"tilt_{annual_optimal_tilt}"].resample("ME").sum()
 
     monthly_df = pd.DataFrame({
         "Month": monthly_user.index.strftime("%B"),
