@@ -132,7 +132,7 @@ def calculate_solar_output(
         hourly_energy_df[f"tilt_{t}"] = poa * float(system_power_kw)
 
     df_energy = pd.DataFrame(hourly_energy_df, index=times)
-    monthly_sum = df_energy.resample("M").sum()
+    monthly_sum = df_energy.resample("ME").sum()
 
     monthly_best = monthly_sum.idxmax(axis=1).str.extract(r"(\d+)").astype(int)
     monthly_best.columns = ["Best Tilt (deg)"]
